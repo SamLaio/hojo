@@ -1,5 +1,6 @@
 package wtf.anurag.hojo.ui.apps.filemanager
 
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Column
@@ -30,6 +31,12 @@ fun FileManagerApp(onBack: () -> Unit) {
     val inputText by fileManagerViewModel.inputText.collectAsState()
     val errorMessage by fileManagerViewModel.errorMessage.collectAsState()
     val uploadProgress by fileManagerViewModel.uploadProgress.collectAsState()
+
+    BackHandler {
+        if (!fileManagerViewModel.handleGoBack()) {
+            onBack()
+        }
+    }
 
     // Single launcher and context used for uploads
     val launcher =
