@@ -137,7 +137,7 @@ fun FileGrid(
                                                 ) {
                                                         val icon =
                                                                 when {
-                                                                        item.type == "dir" ->
+                                                                        item.isDirectory ->
                                                                                 Icons.Default.Folder
                                                                         item.name.endsWith(
                                                                                 ".jpg",
@@ -164,7 +164,7 @@ fun FileGrid(
                                                                                         .InsertDriveFile
                                                                 }
                                                         val tint =
-                                                                if (item.type == "dir")
+                                                                if (item.isDirectory)
                                                                         MaterialTheme.colorScheme
                                                                                 .primary
                                                                 else

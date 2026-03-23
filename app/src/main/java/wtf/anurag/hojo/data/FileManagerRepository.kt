@@ -9,11 +9,13 @@ import java.io.IOException
 import java.net.URLEncoder
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okhttp3.FormBody
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.asRequestBody
+import okhttp3.RequestBody.Companion.toRequestBody
 import wtf.anurag.hojo.data.model.FileItem
 import wtf.anurag.hojo.data.model.StorageStatus
 import javax.inject.Inject
@@ -25,7 +27,7 @@ class FileManagerRepository @Inject constructor(private val client: OkHttpClient
     suspend fun fetchList(baseUrl: String, path: String): List<FileItem> =
             withContext(Dispatchers.IO) {
                 val encodedPath = URLEncoder.encode(path, "UTF-8")
-                val url = "$baseUrl/list?dir=$encodedPath"
+                val url = "$baseUrl/api/files?path=$encodedPath"
                 Log.d(TAG, "fetchList -> GET $url")
 
                 val request = Request.Builder().url(url).build()
@@ -36,13 +38,13 @@ class FileManagerRepository @Inject constructor(private val client: OkHttpClient
                     val json = response.body?.string() ?: "[]"
                     val type = object : TypeToken<List<FileItem>>() {}.type
                     val list: List<FileItem> = gson.fromJson(json, type)
-                    list.sortedWith(compareBy({ it.type != "dir" }, { it.name }))
+                    list.sortedWith(compareBy({ !it.isDirectory }, { it.name }))
                 }
             }
 
     suspend fun fetchStatus(baseUrl: String): StorageStatus =
             withContext(Dispatchers.IO) {
-                val url = "$baseUrl/status"
+                val url = "$baseUrl/api/status"
                 Log.d(TAG, "fetchStatus -> GET $url")
 
                 val request = Request.Builder().url(url).build()
@@ -57,33 +59,32 @@ class FileManagerRepository @Inject constructor(private val client: OkHttpClient
 
     suspend fun createFolder(baseUrl: String, path: String) =
             withContext(Dispatchers.IO) {
-                // Ensure path ends with / to indicate it's a directory
-                val folderPath = if (path.endsWith("/")) path else "$path/"
+                val parentPath = path.substringBeforeLast('/', "/").ifEmpty { "/" }
+                val folderName = path.substringAfterLast('/')
 
                 val body =
                         MultipartBody.Builder()
                                 .setType(MultipartBody.FORM)
-                                .addFormDataPart("path", folderPath)
+                                .addFormDataPart("path", parentPath)
+                                .addFormDataPart("name", folderName)
                                 .build()
 
-                val request = Request.Builder().url("$baseUrl/edit").put(body).build()
+                val request = Request.Builder().url("$baseUrl/mkdir").post(body).build()
 
-                Log.d(TAG, "createFolder -> PUT $baseUrl/edit with path=$folderPath")
+                Log.d(TAG, "createFolder -> POST $baseUrl/mkdir with path=$parentPath name=$folderName")
                 client.newCall(request).execute().use { response ->
                     Log.d(TAG, "createFolder -> response code: ${response.code}")
                     if (!response.isSuccessful) throw IOException("Create failed: ${response.code}")
                 }
             }
 
-    suspend fun deleteItem(baseUrl: String, path: String) =
+    suspend fun deleteItem(baseUrl: String, path: String, isDirectory: Boolean = false) =
             withContext(Dispatchers.IO) {
-                val body =
-                        MultipartBody.Builder()
-                                .setType(MultipartBody.FORM)
-                                .addFormDataPart("path", path)
-                                .build()
+                val type = if (isDirectory) "folder" else "file"
+                val body = "path=${URLEncoder.encode(path, "UTF-8")}&type=$type"
+                        .toRequestBody("application/x-www-form-urlencoded".toMediaType())
 
-                val request = Request.Builder().url("$baseUrl/edit").delete(body).build()
+                val request = Request.Builder().url("$baseUrl/delete").post(body).build()
 
                 client.newCall(request).execute().use { response ->
                     if (!response.isSuccessful) throw IOException("Delete failed: ${response.code}")
@@ -92,14 +93,16 @@ class FileManagerRepository @Inject constructor(private val client: OkHttpClient
 
     suspend fun renameItem(baseUrl: String, from: String, to: String) =
             withContext(Dispatchers.IO) {
+                val newName = to.substringAfterLast('/')
+
                 val body =
                         MultipartBody.Builder()
                                 .setType(MultipartBody.FORM)
-                                .addFormDataPart("path", to)
-                                .addFormDataPart("src", from)
+                                .addFormDataPart("path", from)
+                                .addFormDataPart("name", newName)
                                 .build()
 
-                val request = Request.Builder().url("$baseUrl/edit").put(body).build()
+                val request = Request.Builder().url("$baseUrl/rename").post(body).build()
 
                 client.newCall(request).execute().use { response ->
                     if (!response.isSuccessful) throw IOException("Rename failed: ${response.code}")
@@ -108,8 +111,8 @@ class FileManagerRepository @Inject constructor(private val client: OkHttpClient
 
     suspend fun downloadFile(baseUrl: String, remotePath: String, destFile: File) =
             withContext(Dispatchers.IO) {
-                // Build URL: baseUrl + path + ?download=true
-                val url = "$baseUrl$remotePath?download=true"
+                val encodedPath = URLEncoder.encode(remotePath, "UTF-8")
+                val url = "$baseUrl/download?path=$encodedPath"
                 Log.d(TAG, "downloadFile -> GET $url")
 
                 val request = Request.Builder().url(url).build()
@@ -132,15 +135,9 @@ class FileManagerRepository @Inject constructor(private val client: OkHttpClient
             onProgress: ((bytesWritten: Long, totalBytes: Long) -> Unit)? = null
     ) =
             withContext(Dispatchers.IO) {
-                // Create the parent folder if it doesn't exist
-                val parentPath = targetPath.substringBeforeLast('/', "")
-                if (parentPath.isNotEmpty()) {
-                    try {
-                        createFolder(baseUrl, parentPath)
-                    } catch (e: Exception) {
-                        Log.d(TAG, "Parent folder might already exist or creation failed: ${e.message}")
-                    }
-                }
+                val parentPath = targetPath.substringBeforeLast('/', "").ifEmpty { "/" }
+                val fileName = targetPath.substringAfterLast('/')
+                val encodedParentPath = URLEncoder.encode(parentPath, "UTF-8")
 
                 val extension = file.extension
                 val mimeType =
@@ -157,10 +154,14 @@ class FileManagerRepository @Inject constructor(private val client: OkHttpClient
                 val body =
                         MultipartBody.Builder()
                                 .setType(MultipartBody.FORM)
-                                .addFormDataPart("data", targetPath, fileRequestBody)
+                                .addFormDataPart("file", fileName, fileRequestBody)
                                 .build()
 
-                val request = Request.Builder().url("$baseUrl/edit").post(body).build()
+                val request =
+                        Request.Builder()
+                                .url("$baseUrl/upload?path=$encodedParentPath")
+                                .post(body)
+                                .build()
 
                 client.newCall(request).execute().use { response ->
                     if (!response.isSuccessful) throw IOException("Upload failed: ${response.code}")

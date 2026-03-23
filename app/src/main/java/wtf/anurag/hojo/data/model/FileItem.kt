@@ -2,6 +2,7 @@ package wtf.anurag.hojo.data.model
 
 data class FileItem(
         val name: String,
-        val type: String, // "dir" or "file"
+        val isDirectory: Boolean = false,
+        val isEpub: Boolean = false,
         val size: Long? = null
 )

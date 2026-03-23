@@ -11,32 +11,23 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DeveloperBoard
-import androidx.compose.material.icons.filled.Storage
+import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material.icons.filled.WifiOff
-import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Divider
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import wtf.anurag.hojo.data.model.StorageStatus
-import wtf.anurag.hojo.ui.theme.HojoTheme
-import wtf.anurag.hojo.utils.FormatUtils
 
 @Composable
 fun StatusWidget(
@@ -45,13 +36,6 @@ fun StatusWidget(
     storageStatus: StorageStatus?,
     onConnect: (Boolean) -> Unit
 ) {
-    val usedPercentage =
-        if (storageStatus != null && storageStatus.totalBytes > 0) {
-            (storageStatus.usedBytes.toFloat() / storageStatus.totalBytes.toFloat())
-        } else {
-            0f
-        }
-
     Card(
         shape = MaterialTheme.shapes.large,
         colors = CardDefaults.cardColors(
@@ -106,7 +90,7 @@ fun StatusWidget(
                 }
             }
 
-            // Connection Status
+            // Connection / IP row
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
                 Box(
                     modifier = Modifier.size(32.dp).padding(end = 12.dp),
@@ -127,8 +111,16 @@ fun StatusWidget(
                         color = MaterialTheme.colorScheme.onSecondaryContainer,
                         modifier = Modifier.padding(bottom = 2.dp)
                     )
+                    val connectionDetail = when {
+                        !isConnected -> "Not Connected"
+                        storageStatus?.ip != null -> {
+                            val mode = storageStatus.mode ?: "STA"
+                            "${storageStatus.ip} ($mode)"
+                        }
+                        else -> "Connected via WiFi"
+                    }
                     Text(
-                        text = if (isConnected) "Connected via WiFi" else "Not Connected",
+                        text = connectionDetail,
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Medium
                     )
@@ -151,58 +143,81 @@ fun StatusWidget(
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            if (isConnected && storageStatus != null) {
+                Spacer(modifier = Modifier.height(16.dp))
 
-            // Storage Status
-            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
-                Box(
-                    modifier = Modifier.size(32.dp).padding(end = 12.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Storage,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
-                Column(modifier = Modifier.weight(1f)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween
+                // Signal strength row
+                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+                    Box(
+                        modifier = Modifier.size(32.dp).padding(end = 12.dp),
+                        contentAlignment = Alignment.Center
                     ) {
-                        Text(
-                            text = "Storage",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer
-                        )
-                        Text(
-                            text = if (storageStatus != null)
-                                "${FormatUtils.formatBytes(storageStatus.usedBytes)} / ${FormatUtils.formatBytes(storageStatus.totalBytes)}"
-                            else "Unknown",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                        Icon(
+                            imageVector = Icons.Default.Wifi,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                            modifier = Modifier.size(18.dp)
                         )
                     }
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Signal",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                            modifier = Modifier.padding(bottom = 2.dp)
+                        )
+                        val rssi = storageStatus.rssi
+                        val rssiText = if (rssi != null) {
+                            val quality = when {
+                                rssi >= -50 -> "Excellent"
+                                rssi >= -65 -> "Good"
+                                rssi >= -75 -> "Fair"
+                                else -> "Weak"
+                            }
+                            "$rssi dBm · $quality"
+                        } else "Unknown"
+                        Text(
+                            text = rssiText,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
 
-                    // Progress Bar
-                    LinearProgressIndicator(
-                        progress = { usedPercentage },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(6.dp)
-                            .clip(RoundedCornerShape(3.dp)),
-                        color = MaterialTheme.colorScheme.primary,
-                        trackColor = MaterialTheme.colorScheme.surfaceVariant,
-                        strokeCap = StrokeCap.Round,
-                    )
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Uptime row
+                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+                    Box(
+                        modifier = Modifier.size(32.dp).padding(end = 12.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Timer,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Uptime",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                            modifier = Modifier.padding(bottom = 2.dp)
+                        )
+                        Text(
+                            text = storageStatus.uptime?.let { formatUptime(it) } ?: "Unknown",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
                 }
             }
 
-            // Footer Info
+            // Footer: firmware version
             if (storageStatus?.version != null) {
                 Spacer(modifier = Modifier.height(16.dp))
-//                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -217,5 +232,16 @@ fun StatusWidget(
                 }
             }
         }
+    }
+}
+
+private fun formatUptime(seconds: Long): String {
+    val h = seconds / 3600
+    val m = (seconds % 3600) / 60
+    val s = seconds % 60
+    return when {
+        h > 0 -> "${h}h ${m}m"
+        m > 0 -> "${m}m ${s}s"
+        else -> "${s}s"
     }
 }

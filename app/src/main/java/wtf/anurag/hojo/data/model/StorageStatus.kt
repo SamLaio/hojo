@@ -1,13 +1,12 @@
 package wtf.anurag.hojo.data.model
 
-import com.google.gson.annotations.SerializedName
-
 data class StorageStatus(
-        val totalBytes: Long,
-        val usedBytes: Long,
-        val version: String,
-        @SerializedName("device_type") val deviceType: String,
-        val type: String,
-        val isOk: String,
-        val id: String
+        val totalBytes: Long? = null,
+        val usedBytes: Long? = null,
+        val version: String? = null,
+        val ip: String? = null,
+        val mode: String? = null,
+        val rssi: Int? = null,
+        val freeHeap: Long? = null,
+        val uptime: Long? = null
 )

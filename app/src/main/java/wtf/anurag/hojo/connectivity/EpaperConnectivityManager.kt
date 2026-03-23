@@ -71,12 +71,12 @@ class EpaperConnectivityManager @Inject constructor(
         private const val EPAPER_PASSWORD = "12345678"
         private const val EPAPER_IP = "192.168.3.3"
         private const val EPAPER_PORT = 80
-        private const val DEVICE_HOST_NAME = "e-paper"
-        private const val DEVICE_LAN_HOST = "e-paper.local"
+        private const val DEVICE_HOST_NAME = "crosspoint"
+        private const val DEVICE_LAN_HOST = "crosspoint.local"
 
         // Network Segments (for detecting E-Paper WiFi)
         private const val WIFI_NETWORK_SEGMENT = "192.168.3."
-        private val DEVICE_IP_PREFIXES = listOf("192.168.3.", "192.168.4.", "10.0.0.")
+        private val DEVICE_IP_PREFIXES = listOf("192.168.4.", "10.0.0.")
 
         // Timeouts
         private const val SOCKET_TIMEOUT_MS = 5000
@@ -875,7 +875,7 @@ class EpaperConnectivityManager @Inject constructor(
     private suspend fun pingEpaperStatus(): Boolean = withContext(Dispatchers.IO) {
         try {
             val ip = _discoveredDeviceIp.value ?: EPAPER_IP
-            val url = URL("http://$ip/status")
+            val url = URL("http://$ip/api/status")
             val connection = url.openConnection() as HttpURLConnection
             connection.connectTimeout = PING_TIMEOUT_MS
             connection.readTimeout = PING_TIMEOUT_MS
@@ -1172,7 +1172,7 @@ class EpaperConnectivityManager @Inject constructor(
      */
     private fun probeDeviceStatus(ip: String): Boolean {
         return try {
-            val url = URL("http://$ip/status")
+            val url = URL("http://$ip/api/status")
             val connection = url.openConnection() as HttpURLConnection
             connection.connectTimeout = 1000
             connection.readTimeout = 1000
@@ -1192,7 +1192,7 @@ class EpaperConnectivityManager @Inject constructor(
     private fun probeHttpReachability(ip: String): Boolean {
         return try {
             val request = Request.Builder()
-                .url("http://$ip/status")
+                .url("http://$ip/api/status")
                 .get()
                 .build()
 
@@ -1226,7 +1226,7 @@ class EpaperConnectivityManager @Inject constructor(
                 .build()
 
             val request = Request.Builder()
-                .url("http://$DEVICE_LAN_HOST/status")
+                .url("http://$DEVICE_LAN_HOST/api/status")
                 .get()
                 .build()
 

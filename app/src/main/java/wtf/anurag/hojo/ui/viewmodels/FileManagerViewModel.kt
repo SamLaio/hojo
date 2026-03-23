@@ -121,7 +121,7 @@ constructor(
     }
 
     fun handleNavigate(item: FileItem) {
-        if (item.type == "dir") {
+        if (item.isDirectory) {
             val newPath =
                     if (_currentPath.value == "/") "/${item.name}"
                     else "${_currentPath.value}/${item.name}"
@@ -162,7 +162,7 @@ constructor(
                 val itemPath =
                         if (_currentPath.value == "/") "/${item.name}"
                         else "${_currentPath.value}/${item.name}"
-                repository.deleteItem(baseUrl, itemPath)
+                repository.deleteItem(baseUrl, itemPath, item.isDirectory)
                 loadFiles()
                 loadStatus()
             } catch (e: Exception) {
@@ -222,7 +222,7 @@ constructor(
     }
 
     fun handleDownload(item: FileItem) {
-        if (item.type == "dir") {
+        if (item.isDirectory) {
             android.widget.Toast.makeText(
                             getApplication(),
                             "Cannot download folders",

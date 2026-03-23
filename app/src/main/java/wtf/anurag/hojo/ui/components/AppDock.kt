@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -86,6 +87,12 @@ fun AppDock(
                                 "Settings",
                                 "App preferences",
                                 Icons.Default.Settings
+                        ),
+                        DockAction(
+                                "Device Settings",
+                                "Device",
+                                "Reader settings",
+                                Icons.Default.Tune
                         )
                 )
 

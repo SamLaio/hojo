@@ -36,6 +36,7 @@ import wtf.anurag.hojo.ui.apps.converter.ConverterApp
 import wtf.anurag.hojo.ui.apps.converter.XtcPreviewIntermediate
 import wtf.anurag.hojo.ui.apps.filemanager.FileManagerApp
 import wtf.anurag.hojo.ui.apps.quicklink.QuickLinkModal
+import wtf.anurag.hojo.ui.apps.devicesettings.DeviceSettingsApp
 import wtf.anurag.hojo.ui.apps.settings.SettingsApp
 import wtf.anurag.hojo.ui.apps.renderer.RendererApp
 import wtf.anurag.hojo.ui.apps.tasks.TasksApp
@@ -261,6 +262,11 @@ fun MainScreen() {
                                                                                         .navigate(
                                                                                                 "settings"
                                                                                         )
+                                                                        "Device Settings" ->
+                                                                                navController
+                                                                                        .navigate(
+                                                                                                "device_settings"
+                                                                                        )
                                                                 }
                                                         }
                                                 )
@@ -424,6 +430,34 @@ fun MainScreen() {
                                         )
                                 }
                         ) { SettingsApp(onBack = { navController.popBackStack() }) }
+
+                        composable(
+                                "device_settings",
+                                enterTransition = {
+                                        slideInHorizontally(
+                                                animationSpec = tween(300),
+                                                initialOffsetX = { it }
+                                        )
+                                },
+                                exitTransition = {
+                                        slideOutHorizontally(
+                                                animationSpec = tween(300),
+                                                targetOffsetX = { it }
+                                        )
+                                },
+                                popEnterTransition = {
+                                        slideInHorizontally(
+                                                animationSpec = tween(300),
+                                                initialOffsetX = { -it }
+                                        )
+                                },
+                                popExitTransition = {
+                                        slideOutHorizontally(
+                                                animationSpec = tween(300),
+                                                targetOffsetX = { it }
+                                        )
+                                }
+                        ) { DeviceSettingsApp(onBack = { navController.popBackStack() }) }
 
                         composable(
                                 "tasks",
