@@ -76,13 +76,7 @@ dependencies {
     // --- Third-party Libraries ---
     implementation(libs.okhttp)
     implementation(libs.gson)
-    implementation(libs.jsoup)
     implementation(libs.android.image.cropper)
-    implementation(libs.epublib) {
-        exclude(group = "xmlpull", module = "xmlpull")
-        exclude(group = "net.sf.kxml", module = "kxml2")
-    }
-    implementation("net.sf.kxml:kxml2:2.3.0") { exclude(group = "xmlpull", module = "xmlpull") }
 
     // --- Testing Dependencies ---
     testImplementation(libs.junit)

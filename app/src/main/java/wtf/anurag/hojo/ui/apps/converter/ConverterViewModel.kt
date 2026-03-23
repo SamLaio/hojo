@@ -21,6 +21,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import wtf.anurag.hojo.data.FileManagerRepository
 import javax.inject.Inject
+import kotlinx.coroutines.CancellationException
 
 @HiltViewModel
 class ConverterViewModel @Inject constructor(
@@ -41,8 +42,27 @@ class ConverterViewModel @Inject constructor(
     private val _availableFonts = MutableStateFlow<List<File>>(emptyList())
     val availableFonts: StateFlow<List<File>> = _availableFonts.asStateFlow()
 
+    // WebView-based converter (initialized lazily on first conversion)
+    private var webViewConverter: WebViewConverter? = null
+    private var converterInitialized = false
+
     init {
         loadFonts()
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        webViewConverter?.destroy()
+        webViewConverter = null
+    }
+
+    private suspend fun getConverter(): WebViewConverter {
+        if (converterInitialized) return webViewConverter!!
+        val converter = WebViewConverter(getApplication())
+        webViewConverter = converter
+        converter.initialize()
+        converterInitialized = true
+        return converter
     }
 
     private fun getFontsDir(): File {
@@ -141,19 +161,20 @@ class ConverterViewModel @Inject constructor(
 
                 _status.value = ConverterStatus.Converting(0, 0)
 
-                // Create output file in cache directory
+                val epubBytes = withContext(Dispatchers.IO) { inputStream.use { it.readBytes() } }
+
                 val originalName = getFileName(uri).substringBeforeLast(".")
                 val fileName = (originalName + ".xtc").replace(" ", "_")
                 val outputFile = File(getApplication<Application>().cacheDir, fileName)
 
-                val converter = NativeConverter()
-                withContext(Dispatchers.Default) {
-                    converter.convertToFile(inputStream, outputFile, _settings.value) { current, total ->
-                        _status.value = ConverterStatus.Converting(current, total)
-                    }
+                val converter = getConverter()
+                converter.convertEpub(epubBytes, outputFile, _settings.value) { current, total ->
+                    _status.value = ConverterStatus.Converting(current, total)
                 }
 
                 _status.value = ConverterStatus.Preview(outputFile)
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 e.printStackTrace()
                 _status.value = ConverterStatus.Error("Conversion failed: ${e.message}")

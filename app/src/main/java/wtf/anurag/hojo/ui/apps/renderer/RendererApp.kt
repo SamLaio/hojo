@@ -47,7 +47,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import wtf.anurag.hojo.ui.apps.converter.ConverterSettings
-import wtf.anurag.hojo.ui.apps.converter.XtcRenderer
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

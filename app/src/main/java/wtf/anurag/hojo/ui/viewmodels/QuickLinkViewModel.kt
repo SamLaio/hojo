@@ -19,13 +19,11 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
-import okhttp3.OkHttpClient
 import org.json.JSONObject
 import wtf.anurag.hojo.data.ConnectivityRepository
 import wtf.anurag.hojo.data.FileManagerRepository
 import wtf.anurag.hojo.ui.apps.converter.ConverterSettings
-import wtf.anurag.hojo.ui.apps.converter.HtmlConverter
-import wtf.anurag.hojo.ui.apps.converter.XtcEncoder
+import wtf.anurag.hojo.ui.apps.converter.WebViewConverter
 import javax.inject.Inject
 import kotlin.coroutines.resume
 
@@ -37,7 +35,6 @@ class QuickLinkViewModel @Inject constructor(
     private val repository: FileManagerRepository,
     private val connectivityRepository: ConnectivityRepository,
     private val taskRepository: wtf.anurag.hojo.data.TaskRepository,
-    private val okHttpClient: OkHttpClient
 ) : AndroidViewModel(application) {
 
     private val _quickLinkVisible = MutableStateFlow(false)
@@ -54,6 +51,24 @@ class QuickLinkViewModel @Inject constructor(
 
     private val _previewFile = MutableStateFlow<File?>(null)
     val previewFile: StateFlow<File?> = _previewFile.asStateFlow()
+
+    private var webViewConverter: WebViewConverter? = null
+    private var converterInitialized = false
+
+    override fun onCleared() {
+        super.onCleared()
+        webViewConverter?.destroy()
+        webViewConverter = null
+    }
+
+    private suspend fun getConverter(): WebViewConverter {
+        if (converterInitialized) return webViewConverter!!
+        val converter = WebViewConverter(getApplication())
+        webViewConverter = converter
+        converter.initialize()
+        converterInitialized = true
+        return converter
+    }
 
     fun setQuickLinkVisible(visible: Boolean) {
         _quickLinkVisible.value = visible
@@ -199,21 +214,18 @@ class QuickLinkViewModel @Inject constructor(
                 val title = readabilityResult.title
                 val cleanedHtml = readabilityResult.content // This is the ad-free, reader-view HTML
 
-                // 4. Convert HTML directly to XTC format
-                val converter = HtmlConverter(okHttpClient)
-                val result = withContext(Dispatchers.Default) {
-                    converter.convertHtml(
-                        html = cleanedHtml, // Use cleaned HTML for reader view
-                        title = title,
-                        baseUrl = _quickLinkUrl.value,
-                        settings = ConverterSettings(colorMode = ConverterSettings.ColorMode.MONOCHROME)
-                    )
-                }
+                // 4. Convert HTML directly to XTC format via WebView converter
+                val converter = getConverter()
+                val xtcData = converter.convertHtml(
+                    html = cleanedHtml,
+                    title = title,
+                    settings = ConverterSettings(colorMode = ConverterSettings.ColorMode.MONOCHROME)
+                ) { _, _ -> }
 
                 // Save to temp file
                 val fileName = "${title.take(20).replace(Regex("[^a-zA-Z0-9]"), "_")}.xtc"
                 val tempFile = File(getApplication<Application>().cacheDir, fileName)
-                withContext(Dispatchers.IO) { FileOutputStream(tempFile).use { it.write(result.data) } }
+                withContext(Dispatchers.IO) { FileOutputStream(tempFile).use { it.write(xtcData) } }
 
                 // 5. Rebind to Epaper network for device communication
                 connectivityRepository.bindToEpaperNetwork()

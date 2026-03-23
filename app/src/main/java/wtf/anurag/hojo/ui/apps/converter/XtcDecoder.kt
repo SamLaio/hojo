@@ -14,7 +14,7 @@ import java.nio.ByteOrder
  */
 object XtcDecoder {
 
-    private const val XTC_HEADER_SIZE = 48
+    private const val XTC_HEADER_SIZE = 56  // 48-byte original + 8-byte chapterOffset field
     private const val XTC_METADATA_SIZE = 256
     private const val XTC_INDEX_ENTRY_SIZE = 16
     private const val PAGE_HEADER_SIZE = 22
@@ -47,7 +47,8 @@ object XtcDecoder {
 
             val magic = ByteArray(4)
             buffer.get(magic)
-            if (String(magic) != "XTC\u0000") {
+            val magicStr = String(magic)
+            if (magicStr != "XTC\u0000" && magicStr != "XTCH") {
                 throw IllegalArgumentException("Not a valid XTC file")
             }
 
@@ -61,6 +62,8 @@ object XtcDecoder {
             val metadataOffset = buffer.getLong().toInt()
             val indexOffset = buffer.getLong().toInt()
             val dataOffset = buffer.getLong().toInt()
+            buffer.getLong() // thumbOffset
+            buffer.getLong() // chapterOffset (byte 0x30, added in 56-byte header)
 
             // Prefer computing pageCount from the actual index table size
             if (indexOffset > 0 && dataOffset > indexOffset) {
@@ -113,7 +116,8 @@ object XtcDecoder {
 
                 val magic = ByteArray(4)
                 headerBuffer.get(magic)
-                if (String(magic) != "XTC\u0000") return null
+                val magicStr = String(magic)
+                if (magicStr != "XTC\u0000" && magicStr != "XTCH") return null
 
                 headerBuffer.getShort() // version
                 val pageCount = headerBuffer.getShort().toInt() and 0xFFFF
