@@ -8,6 +8,7 @@ import java.io.File
 import java.io.IOException
 import java.net.URLEncoder
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import okhttp3.FormBody
 import okhttp3.MediaType.Companion.toMediaType
@@ -16,9 +17,16 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.Response
+import okhttp3.WebSocket
+import okhttp3.WebSocketListener
+import okio.ByteString
+import okio.ByteString.Companion.toByteString
 import wtf.anurag.hojo.data.model.FileItem
 import wtf.anurag.hojo.data.model.StorageStatus
 import javax.inject.Inject
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 
 class FileManagerRepository @Inject constructor(private val client: OkHttpClient) {
     private val gson = Gson()
@@ -165,6 +173,92 @@ class FileManagerRepository @Inject constructor(private val client: OkHttpClient
 
                 client.newCall(request).execute().use { response ->
                     if (!response.isSuccessful) throw IOException("Upload failed: ${response.code}")
+                }
+            }
+
+    /**
+     * Uploads a file via the device's WebSocket binary upload protocol (port 81).
+     * This is a clean binary transfer with no multipart framing, avoiding the
+     * \r\n prefix that the ESP32's multipart handler prepends to file content.
+     *
+     * Protocol:
+     *   1. Connect to ws://host:81
+     *   2. Send TEXT "START:<filename>:<size>:<dir>"
+     *   3. Send BINARY chunks of the file data
+     *   4. Receive TEXT "PROGRESS:n:total" updates (optional)
+     *   5. Receive TEXT "DONE" on success, "ERROR:<msg>" on failure
+     *
+     * @param targetPath Full path on device, e.g. "/books/myfile.xtc"
+     */
+    suspend fun uploadFileWebSocket(
+            baseUrl: String,
+            file: File,
+            targetPath: String,
+            onProgress: ((bytesWritten: Long, totalBytes: Long) -> Unit)? = null
+    ) =
+            withContext(Dispatchers.IO) {
+                val host = baseUrl.removePrefix("http://").removePrefix("https://")
+                val wsUrl = "ws://$host:81"
+                val filename = targetPath.substringAfterLast('/')
+                val dir = targetPath.substringBeforeLast('/').ifEmpty { "/" }
+                val fileSize = file.length()
+
+                suspendCancellableCoroutine<Unit> { cont ->
+                    val request = Request.Builder().url(wsUrl).build()
+
+                    val listener = object : WebSocketListener() {
+                        override fun onOpen(ws: WebSocket, response: Response) {
+                            // Send START command then immediately stream the file
+                            ws.send("START:$filename:$fileSize:$dir")
+                            try {
+                                val buffer = ByteArray(8192)
+                                file.inputStream().use { stream ->
+                                    var bytesRead: Int
+                                    while (stream.read(buffer).also { bytesRead = it } != -1) {
+                                        if (!ws.send(buffer.toByteString(0, bytesRead))) {
+                                            throw IOException("WebSocket send queue full")
+                                        }
+                                    }
+                                }
+                            } catch (e: Exception) {
+                                ws.cancel()
+                                if (cont.isActive) cont.resumeWithException(e)
+                            }
+                        }
+
+                        override fun onMessage(ws: WebSocket, text: String) {
+                            when {
+                                text == "DONE" -> {
+                                    ws.close(1000, null)
+                                    if (cont.isActive) cont.resume(Unit)
+                                }
+                                text.startsWith("ERROR:") -> {
+                                    val msg = text.removePrefix("ERROR:")
+                                    ws.close(1000, null)
+                                    if (cont.isActive) cont.resumeWithException(
+                                        IOException("Device upload error: $msg")
+                                    )
+                                }
+                                text.startsWith("PROGRESS:") -> {
+                                    if (onProgress != null) {
+                                        val parts = text.split(":")
+                                        if (parts.size >= 3) {
+                                            val received = parts[1].toLongOrNull() ?: 0L
+                                            val total = parts[2].toLongOrNull() ?: fileSize
+                                            onProgress(received, total)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        override fun onFailure(ws: WebSocket, t: Throwable, response: Response?) {
+                            if (cont.isActive) cont.resumeWithException(t)
+                        }
+                    }
+
+                    val ws = client.newWebSocket(request, listener)
+                    cont.invokeOnCancellation { ws.cancel() }
                 }
             }
 }

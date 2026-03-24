@@ -170,7 +170,7 @@ constructor(
                         var lastUpdateTime = 0L
                         var lastBytesWritten = 0L
 
-                        fileManagerRepository.uploadFile(
+                        fileManagerRepository.uploadFileWebSocket(
                                 baseUrl = baseUrl,
                                 file = tempFile,
                                 targetPath = task.targetPath

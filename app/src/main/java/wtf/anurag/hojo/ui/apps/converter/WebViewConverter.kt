@@ -98,13 +98,24 @@ class WebViewConverter(private val context: Context) {
                         htmlChunks.add(bytes)
                         if (isLast) {
                             val totalSize = htmlChunks.sumOf { it.size }
-                            val result = ByteArray(totalSize)
+                            val assembled = ByteArray(totalSize)
                             var pos = 0
                             for (chunk in htmlChunks) {
-                                chunk.copyInto(result, pos)
+                                chunk.copyInto(assembled, pos)
                                 pos += chunk.size
                             }
                             htmlChunks.clear()
+                            // Strip any prefix bytes before the XTC magic (0x58='X', 0x54='T', 0x43='C')
+                            var xtcStart = 0
+                            for (i in 0 until minOf(assembled.size - 2, 16)) {
+                                if (assembled[i] == 0x58.toByte() &&
+                                    assembled[i + 1] == 0x54.toByte() &&
+                                    assembled[i + 2] == 0x43.toByte()) {
+                                    xtcStart = i
+                                    break
+                                }
+                            }
+                            val result = if (xtcStart > 0) assembled.copyOfRange(xtcStart, assembled.size) else assembled
                             htmlConversionContinuation?.resume(result)
                             htmlConversionContinuation = null
                         }
@@ -520,9 +531,13 @@ class WebViewConverter(private val context: Context) {
             }
 
             addEntry("META-INF/container.xml", container)
+            // html is already a full XHTML document serialized by XMLSerializer in JS.
+            // Prepend the XML declaration which XMLSerializer omits.
+            val xhtmlContent = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n$html"
+
             addEntry("OEBPS/content.opf", opf)
             addEntry("OEBPS/toc.ncx", ncx)
-            addEntry("OEBPS/content.html", html)
+            addEntry("OEBPS/content.html", xhtmlContent)
         }
 
         return baos.toByteArray()

@@ -9,8 +9,10 @@ import androidx.annotation.RequiresApi
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import android.util.Base64
 import java.io.File
 import java.io.FileOutputStream
+import java.net.HttpURLConnection
 import java.net.URL
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -107,32 +109,51 @@ class QuickLinkViewModel @Inject constructor(
         }
     }
 
-    private suspend fun parseHtmlWithWebView(context: Context, baseUrl: String, rawHtml: String): ReadabilityResult {
+    private suspend fun parseUrlWithWebView(context: Context, url: String): ReadabilityResult {
         return withContext(Dispatchers.Main) {
             suspendCancellableCoroutine { continuation ->
                 val webView = WebView(context)
                 webView.settings.javaScriptEnabled = true
-
-                // Prevent WebView from rendering to screen or taking focus
+                webView.settings.domStorageEnabled = true
+                webView.settings.userAgentString =
+                    "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"
                 webView.alpha = 0f
 
+                // Only process the first onPageFinished — it fires once per frame/redirect
+                var hasFinished = false
+
                 webView.webViewClient = object : WebViewClient() {
-                    override fun onPageFinished(view: WebView?, url: String?) {
+                    override fun onPageFinished(view: WebView?, loadedUrl: String?) {
+                        if (hasFinished || !continuation.isActive) return
+                        hasFinished = true
+
                         viewModelScope.launch {
                             try {
-                                // Get Readability.js library
                                 val readabilityJsLibString = ensureReadabilityJsExists()
 
                                 val jsLogic = """
                                     $readabilityJsLibString
-                                    
+
                                     (function() {
                                         try {
                                             var documentClone = document.cloneNode(true);
                                             var article = new Readability(documentClone).parse();
+                                            if (!article) return JSON.stringify({ error: 'Readability returned null' });
+
+                                            // Serialize content to XHTML so CREngine can parse it as
+                                            // application/xhtml+xml. DOMParser+XMLSerializer handles
+                                            // void-element closing (<br/>, <img/>, etc.) automatically.
+                                            var parser = new DOMParser();
+                                            var contentDoc = parser.parseFromString(
+                                                '<html><head><title>' + article.title + '</title></head><body>' + article.content + '</body></html>',
+                                                'text/html'
+                                            );
+                                            var serializer = new XMLSerializer();
+                                            var xhtml = serializer.serializeToString(contentDoc);
+
                                             return JSON.stringify({
                                                 title: article.title,
-                                                content: article.content
+                                                content: xhtml
                                             });
                                         } catch(e) {
                                             return JSON.stringify({ error: e.toString() });
@@ -142,12 +163,12 @@ class QuickLinkViewModel @Inject constructor(
 
                                 view?.evaluateJavascript(jsLogic) { result ->
                                     try {
+                                        if (!continuation.isActive) return@evaluateJavascript
                                         if (result == "null") {
-                                            continuation.resume(ReadabilityResult("Error", rawHtml))
+                                            continuation.resume(ReadabilityResult("Quick Link", ""))
                                             return@evaluateJavascript
                                         }
 
-                                        // Remove the extra quotes wrapper that evaluateJavascript adds
                                         val jsonStr = result.substring(1, result.length - 1)
                                             .replace("\\\"", "\"")
                                             .replace("\\\\", "\\")
@@ -157,30 +178,59 @@ class QuickLinkViewModel @Inject constructor(
 
                                         val json = JSONObject(jsonStr)
                                         val title = json.optString("title", "Quick Link")
-                                        val content = json.optString("content", rawHtml)
+                                        val content = json.optString("content", "")
 
                                         continuation.resume(ReadabilityResult(title, content))
                                     } catch (e: Exception) {
-                                        continuation.resume(ReadabilityResult("Quick Link", rawHtml))
+                                        if (continuation.isActive) {
+                                            continuation.resume(ReadabilityResult("Quick Link", ""))
+                                        }
                                     } finally {
                                         webView.destroy()
                                     }
                                 }
                             } catch (e: Exception) {
-                                continuation.resume(ReadabilityResult("Quick Link", rawHtml))
+                                if (continuation.isActive) {
+                                    continuation.resume(ReadabilityResult("Quick Link", ""))
+                                }
                                 webView.destroy()
                             }
                         }
                     }
                 }
 
-                // Load the data
-                webView.loadDataWithBaseURL(baseUrl, rawHtml, "text/html", "UTF-8", null)
+                webView.loadUrl(url)
 
-                // Handle cancellation
                 continuation.invokeOnCancellation {
                     webView.destroy()
                 }
+            }
+        }
+    }
+
+    /**
+     * Replaces <img src="https://..."> with base64 data URLs so images survive
+     * offline EPUB conversion inside CREngine WASM. Skips anything already a
+     * data URL, and silently drops images that fail to download.
+     */
+    private fun inlineImagesAsDataUrls(html: String): String {
+        val imgSrcRegex = Regex("""(<img\b[^>]*?\bsrc=)(["'])([^"'#][^"']*)(\2)""", RegexOption.IGNORE_CASE)
+        return imgSrcRegex.replace(html) { match ->
+            val src = match.groupValues[3]
+            if (src.startsWith("data:")) return@replace match.value
+            try {
+                val conn = URL(src).openConnection() as HttpURLConnection
+                conn.connectTimeout = 8_000
+                conn.readTimeout = 8_000
+                conn.setRequestProperty("User-Agent", "Mozilla/5.0")
+                val contentType = conn.contentType?.substringBefore(";")?.trim()
+                    ?.takeIf { it.startsWith("image/") } ?: "image/jpeg"
+                val bytes = conn.inputStream.use { it.readBytes() }
+                if (bytes.size > 4 * 1024 * 1024) return@replace match.value // skip >4 MB images
+                val b64 = Base64.encodeToString(bytes, Base64.NO_WRAP)
+                "${match.groupValues[1]}${match.groupValues[2]}data:$contentType;base64,$b64${match.groupValues[4]}"
+            } catch (e: Exception) {
+                match.value // keep original src on error, converter will just skip it
             }
         }
     }
@@ -201,20 +251,19 @@ class QuickLinkViewModel @Inject constructor(
                     return@launch
                 }
 
-                // 2. Fetch Raw HTML
-                val rawHtml = withContext(Dispatchers.IO) { URL(_quickLinkUrl.value).readText() }
-
-                // 3. Parse using WebView with Readability.js (Replacing Jsoup)
-                val readabilityResult = parseHtmlWithWebView(
+                // 2. Load URL in WebView and extract content with Readability.js
+                val readabilityResult = parseUrlWithWebView(
                     context = getApplication(),
-                    baseUrl = _quickLinkUrl.value,
-                    rawHtml = rawHtml
+                    url = _quickLinkUrl.value
                 )
 
                 val title = readabilityResult.title
-                val cleanedHtml = readabilityResult.content // This is the ad-free, reader-view HTML
+                // Inline images as data URLs so CREngine can render them offline
+                val cleanedHtml = withContext(Dispatchers.IO) {
+                    inlineImagesAsDataUrls(readabilityResult.content)
+                }
 
-                // 4. Convert HTML directly to XTC format via WebView converter
+                // 3. Convert HTML directly to XTC format via WebView converter
                 val converter = getConverter()
                 val xtcData = converter.convertHtml(
                     html = cleanedHtml,
