@@ -51,13 +51,15 @@ import java.util.Date
 import java.util.Locale
 import wtf.anurag.hojo.data.model.TaskItem
 import wtf.anurag.hojo.data.model.TaskStatus
+import wtf.anurag.hojo.ui.i18n.LocalAppStrings
 import wtf.anurag.hojo.ui.viewmodels.TasksViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TasksApp(onBack: () -> Unit, viewModel: TasksViewModel = hiltViewModel()) {
     var selectedTabIndex by remember { mutableIntStateOf(0) }
-    val tabs = listOf("Ongoing", "History")
+    val text = LocalAppStrings.current
+    val tabs = listOf(text.ongoing, text.history)
 
     val ongoingTasks by viewModel.ongoingTasks.collectAsState()
     val historyTasks by viewModel.historyTasks.collectAsState()
@@ -66,10 +68,10 @@ fun TasksApp(onBack: () -> Unit, viewModel: TasksViewModel = hiltViewModel()) {
             topBar = {
                 Column {
                     CenterAlignedTopAppBar(
-                            title = { Text("Tasks") },
+                            title = { Text(text.tasks) },
                             navigationIcon = {
                                 IconButton(onClick = onBack) {
-                                    Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                                    Icon(Icons.Default.ArrowBack, contentDescription = text.back)
                                 }
                             },
                             colors =
@@ -104,7 +106,7 @@ fun TasksApp(onBack: () -> Unit, viewModel: TasksViewModel = hiltViewModel()) {
                                 horizontalArrangement = Arrangement.End
                         ) {
                             IconButton(onClick = { viewModel.clearHistory() }) {
-                                Icon(Icons.Default.Delete, contentDescription = "Clear History")
+                                Icon(Icons.Default.Delete, contentDescription = text.clearHistory)
                             }
                         }
                     }
@@ -123,10 +125,11 @@ fun TasksApp(onBack: () -> Unit, viewModel: TasksViewModel = hiltViewModel()) {
 
 @Composable
 fun TaskList(tasks: List<TaskItem>, onCancel: (String) -> Unit, onRetry: (String) -> Unit) {
+    val text = LocalAppStrings.current
     if (tasks.isEmpty()) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Text(
-                    text = "No tasks",
+                    text = text.noTasks,
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -141,6 +144,7 @@ fun TaskList(tasks: List<TaskItem>, onCancel: (String) -> Unit, onRetry: (String
 
 @Composable
 fun TaskItemCard(task: TaskItem, onCancel: (String) -> Unit, onRetry: (String) -> Unit) {
+    val text = LocalAppStrings.current
     Card(
             colors =
                     CardDefaults.cardColors(
@@ -167,7 +171,7 @@ fun TaskItemCard(task: TaskItem, onCancel: (String) -> Unit, onRetry: (String) -
                     Column {
                         Text(text = task.fileName, style = MaterialTheme.typography.titleMedium)
                         Text(
-                                text = formatStatus(task),
+                                text = formatStatus(task, text),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -176,11 +180,11 @@ fun TaskItemCard(task: TaskItem, onCancel: (String) -> Unit, onRetry: (String) -
 
                 if (task.status == TaskStatus.QUEUED || task.status == TaskStatus.UPLOADING) {
                     IconButton(onClick = { onCancel(task.id) }) {
-                        Icon(Icons.Default.Cancel, contentDescription = "Cancel")
+                        Icon(Icons.Default.Cancel, contentDescription = text.cancel)
                     }
                 } else if (task.status == TaskStatus.FAILED || task.status == TaskStatus.CANCELLED) {
                     IconButton(onClick = { onRetry(task.id) }) {
-                        Icon(Icons.Default.Refresh, contentDescription = "Retry")
+                        Icon(Icons.Default.Refresh, contentDescription = text.retry)
                     }
                 }
             }
@@ -211,7 +215,7 @@ fun TaskItemCard(task: TaskItem, onCancel: (String) -> Unit, onRetry: (String) -
             } else if (task.status == TaskStatus.FAILED && task.error != null) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                        text = "Error: ${task.error}",
+                        text = "${text.error}: ${task.error}",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.error
                 )
@@ -241,14 +245,14 @@ fun getStatusColor(status: TaskStatus): androidx.compose.ui.graphics.Color {
     }
 }
 
-fun formatStatus(task: TaskItem): String {
+fun formatStatus(task: TaskItem, text: wtf.anurag.hojo.ui.i18n.AppStrings): String {
     val date = SimpleDateFormat("MMM d, HH:mm", Locale.getDefault()).format(Date(task.timestamp))
     return when (task.status) {
-        TaskStatus.QUEUED -> "Queued • $date"
-        TaskStatus.UPLOADING -> "Uploading..."
-        TaskStatus.COMPLETED -> "Completed • $date"
-        TaskStatus.FAILED -> "Failed • $date"
-        TaskStatus.CANCELLED -> "Cancelled • $date"
+        TaskStatus.QUEUED -> "${text.queued} • $date"
+        TaskStatus.UPLOADING -> text.uploading
+        TaskStatus.COMPLETED -> "${text.completed} • $date"
+        TaskStatus.FAILED -> "${text.failed} • $date"
+        TaskStatus.CANCELLED -> "${text.cancelled} • $date"
     }
 }
 

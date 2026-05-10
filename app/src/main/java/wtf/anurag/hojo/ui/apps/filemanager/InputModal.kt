@@ -23,6 +23,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import wtf.anurag.hojo.ui.i18n.LocalAppStrings
 import wtf.anurag.hojo.ui.theme.HojoTheme
 
 @Composable
@@ -38,6 +39,7 @@ fun InputModal(
 ) {
         if (visible) {
                 val colors = HojoTheme.colors
+                val text = LocalAppStrings.current
                 val focusRequester = remember { FocusRequester() }
 
                 Dialog(onDismissRequest = onClose) {
@@ -77,7 +79,7 @@ fun InputModal(
                                                                 .padding(top = 24.dp),
                                                 horizontalArrangement = Arrangement.End
                                         ) {
-                                                TextButton(onClick = onClose) { Text("Cancel") }
+                                                TextButton(onClick = onClose) { Text(text.cancel) }
 
                                                 Spacer(modifier = Modifier.width(8.dp))
 

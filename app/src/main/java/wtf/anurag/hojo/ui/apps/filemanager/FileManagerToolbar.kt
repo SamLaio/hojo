@@ -15,19 +15,21 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import wtf.anurag.hojo.ui.i18n.LocalAppStrings
 
 @Composable
 fun FileManagerToolbar(onCreateFolder: () -> Unit, onUpload: () -> Unit) {
+        val text = LocalAppStrings.current
         Row(
                 modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp, horizontal = 16.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
                 ToolbarButton(
-                        text = "New Folder",
+                        text = text.newFolder,
                         icon = Icons.Default.CreateNewFolder,
                         onClick = onCreateFolder
                 )
-                ToolbarButton(text = "Upload", icon = Icons.Default.CloudUpload, onClick = onUpload)
+                ToolbarButton(text = text.upload, icon = Icons.Default.CloudUpload, onClick = onUpload)
         }
 }
 

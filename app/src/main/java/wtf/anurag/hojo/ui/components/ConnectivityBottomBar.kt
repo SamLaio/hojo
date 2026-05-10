@@ -22,9 +22,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import wtf.anurag.hojo.ui.i18n.LocalAppStrings
 
 @Composable
 fun ConnectivityBottomBar(isConnected: Boolean, modifier: Modifier = Modifier) {
+    val text = LocalAppStrings.current
     Surface(
             modifier = modifier.fillMaxWidth(),
             color = MaterialTheme.colorScheme.surfaceContainer,
@@ -55,7 +57,7 @@ fun ConnectivityBottomBar(isConnected: Boolean, modifier: Modifier = Modifier) {
 
             // Status Text
             Text(
-                    text = if (isConnected) "Connected" else "Not connected",
+                    text = if (isConnected) text.connected else text.notConnected,
                     style = MaterialTheme.typography.labelLarge
             )
         }

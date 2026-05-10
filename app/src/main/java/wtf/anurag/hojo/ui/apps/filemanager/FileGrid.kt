@@ -42,6 +42,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import wtf.anurag.hojo.data.model.FileItem
+import wtf.anurag.hojo.ui.i18n.LocalAppStrings
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -56,6 +57,7 @@ fun FileGrid(
         errorMessage: String? = null
 ) {
         val colors = MaterialTheme.colorScheme
+        val text = LocalAppStrings.current
 
         Box(modifier = Modifier.fillMaxSize()) {
                 if (errorMessage != null) {
@@ -92,7 +94,7 @@ fun FileGrid(
                                         modifier = Modifier.size(48.dp)
                                 )
                                 Text(
-                                        text = "Folder is empty",
+                                        text = text.folderEmpty,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         style = MaterialTheme.typography.bodyLarge,
                                         modifier = Modifier.padding(top = 16.dp)
@@ -195,14 +197,14 @@ fun FileGrid(
                                                 ) {
                                                         if (!item.isDirectory) {
                                                                 DropdownMenuItem(
-                                                                        text = { Text("Rename") },
+                                                                        text = { Text(text.rename) },
                                                                         onClick = {
                                                                                 showMenu = false
                                                                                 onRename(item)
                                                                         }
                                                                 )
                                                                 DropdownMenuItem(
-                                                                        text = { Text("Move") },
+                                                                        text = { Text(text.move) },
                                                                         onClick = {
                                                                                 showMenu = false
                                                                                 onMove(item)
@@ -210,7 +212,7 @@ fun FileGrid(
                                                                 )
                                                         }
                                                         DropdownMenuItem(
-                                                                text = { Text("Download") },
+                                                                text = { Text(text.download) },
                                                                 onClick = {
                                                                         showMenu = false
                                                                         onDownload(item)
@@ -219,7 +221,7 @@ fun FileGrid(
                                                         DropdownMenuItem(
                                                                 text = {
                                                                         Text(
-                                                                                "Delete",
+                                                                                text.delete,
                                                                                 color =
                                                                                         MaterialTheme
                                                                                                 .colorScheme

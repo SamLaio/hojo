@@ -24,9 +24,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import wtf.anurag.hojo.data.model.UploadProgress
+import wtf.anurag.hojo.ui.i18n.LocalAppStrings
 
 @Composable
 fun UploadProgressIndicator(uploadProgress: UploadProgress?, modifier: Modifier = Modifier) {
+        val text = LocalAppStrings.current
 
         AnimatedVisibility(
                 visible = uploadProgress != null,
@@ -50,7 +52,7 @@ fun UploadProgressIndicator(uploadProgress: UploadProgress?, modifier: Modifier 
                                         modifier = Modifier.fillMaxWidth()
                                 ) {
                                         Text(
-                                                text = "Uploading...",
+                                                text = text.uploading,
                                                 style = MaterialTheme.typography.bodyMedium,
                                                 fontWeight = FontWeight.Medium,
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -87,7 +89,7 @@ fun UploadProgressIndicator(uploadProgress: UploadProgress?, modifier: Modifier 
                                                 modifier = Modifier.fillMaxWidth()
                                         ) {
                                                 Text(
-                                                        text = "Speed:",
+                                                        text = text.speed,
                                                         style = MaterialTheme.typography.bodySmall,
                                                         color =
                                                                 MaterialTheme.colorScheme

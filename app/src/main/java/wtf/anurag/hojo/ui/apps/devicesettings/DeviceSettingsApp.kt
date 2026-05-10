@@ -55,6 +55,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import wtf.anurag.hojo.data.model.DeviceSetting
+import wtf.anurag.hojo.ui.i18n.LocalAppStrings
 import wtf.anurag.hojo.ui.viewmodels.DeviceSettingsViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -69,6 +70,7 @@ fun DeviceSettingsApp(
     val isSaving by viewModel.isSaving.collectAsState()
     val errorMessage by viewModel.errorMessage.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
+    val text = LocalAppStrings.current
 
     val hasPendingChanges = pendingChanges.isNotEmpty()
 
@@ -83,11 +85,11 @@ fun DeviceSettingsApp(
             topBar = {
                 CenterAlignedTopAppBar(
                         title = {
-                            Text(if (hasPendingChanges) "Device Settings*" else "Device Settings")
+                            Text(if (hasPendingChanges) "${text.deviceSettings}*" else text.deviceSettings)
                         },
                         navigationIcon = {
                             IconButton(onClick = onBack) {
-                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = text.back)
                             }
                         },
                         actions = {
@@ -103,7 +105,7 @@ fun DeviceSettingsApp(
                                 } else {
                                     Icon(
                                             Icons.Default.Save,
-                                            contentDescription = "Save",
+                                            contentDescription = text.save,
                                             tint = if (hasPendingChanges)
                                                 MaterialTheme.colorScheme.primary
                                             else
@@ -175,6 +177,7 @@ private fun ToggleRow(
         pendingValue: Boolean?,
         onStage: (String, Any) -> Unit
 ) {
+    val text = LocalAppStrings.current
     val current = pendingValue ?: setting.value
     Row(
             modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp, horizontal = 4.dp),
@@ -199,6 +202,7 @@ private fun EnumRow(
         pendingValue: Int?,
         onStage: (String, Any) -> Unit
 ) {
+    val text = LocalAppStrings.current
     val current = pendingValue ?: setting.value
     var showDialog by remember { mutableStateOf(false) }
 
@@ -235,7 +239,7 @@ private fun EnumRow(
                     }
                 },
                 confirmButton = {
-                    TextButton(onClick = { showDialog = false }) { Text("Cancel") }
+                    TextButton(onClick = { showDialog = false }) { Text(text.cancel) }
                 }
         )
     }

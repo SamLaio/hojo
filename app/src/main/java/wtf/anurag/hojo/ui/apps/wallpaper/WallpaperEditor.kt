@@ -68,6 +68,7 @@ import com.canhub.cropper.CropImageView
 import java.io.File
 import java.io.FileOutputStream
 import wtf.anurag.hojo.ui.theme.HojoTheme
+import wtf.anurag.hojo.ui.i18n.LocalAppStrings
 import wtf.anurag.hojo.ui.viewmodels.DEFAULT_FILTERS
 import wtf.anurag.hojo.ui.viewmodels.INK_SCREEN_PRESET
 import wtf.anurag.hojo.ui.viewmodels.WallpaperViewModel
@@ -77,6 +78,7 @@ import wtf.anurag.hojo.ui.viewmodels.WallpaperViewModel
 @Composable
 fun WallpaperEditor(onBack: () -> Unit, viewModel: WallpaperViewModel = hiltViewModel()) {
         val colors = HojoTheme.colors
+        val text = LocalAppStrings.current
         val context = LocalContext.current
 
         // State from ViewModel
@@ -119,12 +121,12 @@ fun WallpaperEditor(onBack: () -> Unit, viewModel: WallpaperViewModel = hiltView
                 Scaffold(
                         topBar = {
                                 TopAppBar(
-                                        title = { Text("Crop Image") },
+                                        title = { Text(text.cropImage) },
                                         navigationIcon = {
                                                 IconButton(onClick = { croppingUri = null }) {
                                                         Icon(
                                                                 Icons.Default.Close,
-                                                                contentDescription = "Cancel",
+                                                                contentDescription = text.cancel,
                                                                 tint =
                                                                         MaterialTheme.colorScheme
                                                                                 .error
@@ -177,7 +179,7 @@ fun WallpaperEditor(onBack: () -> Unit, viewModel: WallpaperViewModel = hiltView
                                                 ) {
                                                         Icon(
                                                                 Icons.Default.Check,
-                                                                contentDescription = "Done",
+                                                                contentDescription = text.done,
                                                                 tint =
                                                                         MaterialTheme.colorScheme
                                                                                 .primary
@@ -231,7 +233,7 @@ fun WallpaperEditor(onBack: () -> Unit, viewModel: WallpaperViewModel = hiltView
                 Scaffold(
                         topBar = {
                                 CenterAlignedTopAppBar(
-                                        title = { Text("Wallpaper") },
+                                        title = { Text(text.wallpaper) },
                                         colors =
                                                 TopAppBarDefaults.centerAlignedTopAppBarColors(
                                                         containerColor =
@@ -252,7 +254,7 @@ fun WallpaperEditor(onBack: () -> Unit, viewModel: WallpaperViewModel = hiltView
                                 verticalArrangement = Arrangement.Center
                         ) {
                                 Text(
-                                        text = "Select Orientation",
+                                        text = text.selectOrientation,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         style = MaterialTheme.typography.titleMedium,
                                         modifier = Modifier.padding(bottom = 24.dp)
@@ -291,7 +293,7 @@ fun WallpaperEditor(onBack: () -> Unit, viewModel: WallpaperViewModel = hiltView
                                                 )
                                                 Spacer(modifier = Modifier.height(16.dp))
                                                 Text(
-                                                        text = "Portrait",
+                                                        text = text.portrait,
                                                         color = MaterialTheme.colorScheme.onSurface,
                                                         style = MaterialTheme.typography.titleMedium
                                                 )
@@ -336,7 +338,7 @@ fun WallpaperEditor(onBack: () -> Unit, viewModel: WallpaperViewModel = hiltView
                                                 )
                                                 Spacer(modifier = Modifier.height(16.dp))
                                                 Text(
-                                                        text = "Landscape",
+                                                        text = text.landscape,
                                                         color = MaterialTheme.colorScheme.onSurface,
                                                         style = MaterialTheme.typography.titleMedium
                                                 )
@@ -358,14 +360,14 @@ fun WallpaperEditor(onBack: () -> Unit, viewModel: WallpaperViewModel = hiltView
                 Scaffold(
                         topBar = {
                                 LargeTopAppBar(
-                                        title = { Text("Select Image") },
+                                        title = { Text(text.selectImage) },
                                         navigationIcon = {
                                                 IconButton(
                                                         onClick = { viewModel.setTemplate(null) }
                                                 ) {
                                                         Icon(
                                                                 Icons.AutoMirrored.Filled.ArrowBack,
-                                                                contentDescription = "Back"
+                                                                contentDescription = text.back
                                                         )
                                                 }
                                         },
@@ -414,7 +416,7 @@ fun WallpaperEditor(onBack: () -> Unit, viewModel: WallpaperViewModel = hiltView
                                         )
                                         Spacer(modifier = Modifier.width(10.dp))
                                         Text(
-                                                "Take Photo",
+                                                text.takePhoto,
                                                 color = MaterialTheme.colorScheme.onPrimary,
                                                 style = MaterialTheme.typography.labelLarge
                                         )
@@ -447,7 +449,7 @@ fun WallpaperEditor(onBack: () -> Unit, viewModel: WallpaperViewModel = hiltView
                                         )
                                         Spacer(modifier = Modifier.width(10.dp))
                                         Text(
-                                                "From Album",
+                                                text.fromAlbum,
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                                 style = MaterialTheme.typography.labelLarge
                                         )
@@ -461,12 +463,12 @@ fun WallpaperEditor(onBack: () -> Unit, viewModel: WallpaperViewModel = hiltView
         Scaffold(
                 topBar = {
                         TopAppBar(
-                                title = { Text("Edit") },
+                                title = { Text(text.edit) },
                                 navigationIcon = {
                                         IconButton(onClick = onBack) {
                                                 Icon(
                                                         Icons.AutoMirrored.Filled.ArrowBack,
-                                                        contentDescription = "Back"
+                                                        contentDescription = text.back
                                                 )
                                         }
                                 },
@@ -478,7 +480,7 @@ fun WallpaperEditor(onBack: () -> Unit, viewModel: WallpaperViewModel = hiltView
                                                 )
                                         } else {
                                                 Text(
-                                                        text = "Save",
+                                                        text = text.save,
                                                         color = MaterialTheme.colorScheme.primary,
                                                         style = MaterialTheme.typography.labelLarge,
                                                         modifier =
@@ -581,7 +583,7 @@ fun WallpaperEditor(onBack: () -> Unit, viewModel: WallpaperViewModel = hiltView
                                                 verticalAlignment = Alignment.CenterVertically
                                         ) {
                                                 Text(
-                                                        text = "Reset",
+                                                        text = text.reset,
                                                         color = MaterialTheme.colorScheme.primary,
                                                         modifier =
                                                                 Modifier.clickable {
@@ -613,7 +615,7 @@ fun WallpaperEditor(onBack: () -> Unit, viewModel: WallpaperViewModel = hiltView
                                                                         )
                                                 ) {
                                                         Text(
-                                                                text = "Ink Screen",
+                                                                text = text.inkScreen,
                                                                 color =
                                                                         MaterialTheme.colorScheme
                                                                                 .onPrimary
@@ -621,16 +623,16 @@ fun WallpaperEditor(onBack: () -> Unit, viewModel: WallpaperViewModel = hiltView
                                                 }
                                         }
 
-                                        FilterSlider("Grayscale", filters.grayscale, 0f, 100f) {
+                                        FilterSlider(text.grayscale, filters.grayscale, 0f, 100f) {
                                                 viewModel.setFilters(filters.copy(grayscale = it))
                                         }
-                                        FilterSlider("Contrast", filters.contrast, 0f, 150f) {
+                                        FilterSlider(text.contrast, filters.contrast, 0f, 150f) {
                                                 viewModel.setFilters(filters.copy(contrast = it))
                                         }
-                                        FilterSlider("Brightness", filters.brightness, 0f, 200f) {
+                                        FilterSlider(text.brightness, filters.brightness, 0f, 200f) {
                                                 viewModel.setFilters(filters.copy(brightness = it))
                                         }
-                                        FilterSlider("Saturation", filters.saturation, 0f, 200f) {
+                                        FilterSlider(text.saturation, filters.saturation, 0f, 200f) {
                                                 viewModel.setFilters(filters.copy(saturation = it))
                                         }
                                 }

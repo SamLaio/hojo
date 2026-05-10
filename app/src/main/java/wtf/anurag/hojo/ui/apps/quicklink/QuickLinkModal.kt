@@ -31,6 +31,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import wtf.anurag.hojo.ui.i18n.LocalAppStrings
 import wtf.anurag.hojo.ui.theme.HojoTheme
 
 @Composable
@@ -46,6 +47,7 @@ fun QuickLinkModal(
 ) {
         if (visible) {
                 val colors = HojoTheme.colors
+                val text = LocalAppStrings.current
 
                 Dialog(onDismissRequest = onClose) {
                         Surface(
@@ -79,7 +81,7 @@ fun QuickLinkModal(
                                         }
 
                                         Text(
-                                                text = "New Quick Link",
+                                                text = text.newQuickLink,
                                                 color = MaterialTheme.colorScheme.onSurface,
                                                 style = MaterialTheme.typography.headlineSmall,
                                                 modifier = Modifier.padding(bottom = 8.dp),
@@ -87,8 +89,7 @@ fun QuickLinkModal(
                                         )
 
                                         Text(
-                                                text =
-                                                        "Paste a URL below to convert and send it to your device instantly.",
+                                                text = text.quickLinkPrompt,
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                                 style = MaterialTheme.typography.bodyMedium,
                                                 textAlign = TextAlign.Center,
@@ -148,9 +149,9 @@ fun QuickLinkModal(
                                                 horizontalArrangement = Arrangement.End
                                         ) {
                                                 TextButton(
-                                                        onClick = onClose,
-                                                        enabled = !converting
-                                                ) { Text("Cancel") }
+                                                onClick = onClose,
+                                                enabled = !converting
+                                                ) { Text(text.cancel) }
 
                                                 Spacer(modifier = Modifier.width(8.dp))
 
@@ -171,7 +172,7 @@ fun QuickLinkModal(
                                                                         strokeWidth = 2.dp
                                                                 )
                                                         } else {
-                                                                Text("Send Link")
+                                                                Text(text.sendLink)
                                                         }
                                                 }
                                         }

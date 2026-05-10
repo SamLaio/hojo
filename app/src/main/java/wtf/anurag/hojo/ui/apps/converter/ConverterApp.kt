@@ -19,6 +19,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
+import wtf.anurag.hojo.ui.i18n.LocalAppStrings
 import wtf.anurag.hojo.ui.viewmodels.ConnectivityViewModel
 
 private val CDN_FONTS = listOf(
@@ -39,6 +40,7 @@ fun ConverterApp(onBack: () -> Unit, connectivityViewModel: ConnectivityViewMode
     val settings by viewModel.settings.collectAsState()
     val selectedFile by viewModel.selectedFile.collectAsState()
     val deviceBaseUrl by connectivityViewModel.deviceBaseUrl.collectAsState()
+    val text = LocalAppStrings.current
 
     if (status is ConverterStatus.Preview) {
         val previewStatus = status as ConverterStatus.Preview
@@ -67,10 +69,10 @@ fun ConverterApp(onBack: () -> Unit, connectivityViewModel: ConnectivityViewMode
     Scaffold(
         topBar = {
             LargeTopAppBar(
-                title = { Text("EPUB Converter") },
+                title = { Text(text.epubConverter) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.Filled.ArrowBack, contentDescription = text.back)
                     }
                 },
                 colors = TopAppBarDefaults.largeTopAppBarColors(
@@ -94,10 +96,10 @@ fun ConverterApp(onBack: () -> Unit, connectivityViewModel: ConnectivityViewMode
                     Button(
                         onClick = { filePickerLauncher.launch(arrayOf("application/epub+zip")) },
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-                    ) { Text("Select EPUB File") }
+                    ) { Text(text.selectEpubFile) }
                 } else {
                     Text(
-                        text = "Selected: ${selectedFile?.path?.split("/")?.last()}",
+                        text = "${text.selected}: ${selectedFile?.path?.split("/")?.last()}",
                         color = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.padding(vertical = 12.dp)
                     )
@@ -121,37 +123,37 @@ fun ConverterApp(onBack: () -> Unit, connectivityViewModel: ConnectivityViewMode
                         enabled = status is ConverterStatus.Idle,
                         modifier = Modifier.fillMaxWidth(),
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-                    ) { Text("Convert to XTC") }
+                    ) { Text(text.convertToXtc) }
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
 
                 when (val s = status) {
                     is ConverterStatus.ReadingFile ->
-                        Text("Reading file...", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(text.readingFile, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     is ConverterStatus.Converting -> {
                         LinearProgressIndicator(
                             modifier = Modifier.fillMaxWidth(),
                             color = MaterialTheme.colorScheme.primary
                         )
                         Text(
-                            "Converting: Page ${s.progress}" + if (s.total > 0) " / ${s.total}" else "",
+                            text.convertingPage(s.progress, s.total),
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(top = 8.dp)
                         )
                     }
                     is ConverterStatus.Uploading -> {
                         CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
-                        Text("Uploading to e-paper...", color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
+                        Text(text.uploadingToDevice, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
                     }
                     is ConverterStatus.UploadSuccess -> {
-                        Text("Upload Successful!", color = Color.Green, fontWeight = FontWeight.Bold)
+                        Text(text.uploadSuccessful, color = Color.Green, fontWeight = FontWeight.Bold)
                         Button(onClick = { viewModel.reset() }, modifier = Modifier.padding(top = 8.dp)) {
-                            Text("Convert Another")
+                            Text(text.convertAnother)
                         }
                     }
                     is ConverterStatus.Error ->
-                        Text("Error: ${s.message}", color = Color.Red)
+                        Text("${text.error}: ${s.message}", color = Color.Red)
                     else -> {}
                 }
 
@@ -168,6 +170,7 @@ fun SettingsSection(
     onUpdate: (ConverterSettings) -> Unit,
     onImportFont: () -> Unit
 ) {
+    val text = LocalAppStrings.current
     Column(modifier = Modifier.fillMaxWidth()) {
 
         // ── Device ──────────────────────────────────────────────────────────────
@@ -226,7 +229,7 @@ fun SettingsSection(
         OutlinedButton(
             onClick = onImportFont,
             modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
-        ) { Text("Import Custom Font") }
+        ) { Text(text.importCustomFont) }
 
         // Text Alignment
         DropdownSetting(
@@ -269,7 +272,7 @@ fun SettingsSection(
                     value = settings.hyphenationLang,
                     onValueChange = { onUpdate(settings.copy(hyphenationLang = it)) },
                     singleLine = true,
-                    placeholder = { Text("auto") },
+                    placeholder = { Text(text.auto) },
                     modifier = Modifier.fillMaxWidth(),
                     textStyle = MaterialTheme.typography.bodyMedium
                 )

@@ -14,6 +14,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import java.io.File
+import wtf.anurag.hojo.ui.i18n.LocalAppStrings
 
 /**
  * Small intermediate preview shown before opening the full `XtcPreviewScreen`.
@@ -28,6 +29,7 @@ fun XtcPreviewIntermediate(
     isSaved: Boolean
 ) {
     val showFull = remember { mutableStateOf(false) }
+    val text = LocalAppStrings.current
 
     if (showFull.value) {
         // Show the existing full preview screen; when it requests back, return to this intermediate view.
@@ -50,9 +52,9 @@ fun XtcPreviewIntermediate(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Text(text = "Preview file")
-        Text(text = "Name: ${file.name}")
-        Text(text = "Size: ${file.length()} bytes")
+        Text(text = text.previewFile)
+        Text(text = "${text.name}: ${file.name}")
+        Text(text = "${text.size}: ${file.length()} ${text.bytes}")
 
         // Primary actions grouped together
         Row(
@@ -63,14 +65,14 @@ fun XtcPreviewIntermediate(
                 onClick = { showFull.value = true },
                 modifier = Modifier.weight(1f)
             ) {
-                Text("Open preview")
+                Text(text.openPreview)
             }
 
             Button(
                 onClick = onUpload,
                 modifier = Modifier.weight(1f)
             ) {
-                Text("Upload")
+                Text(text.upload)
             }
         }
 
@@ -84,14 +86,14 @@ fun XtcPreviewIntermediate(
                 enabled = !isSaved,
                 modifier = Modifier.weight(1f)
             ) {
-                Text(if (isSaved) "Saved" else "Save to Downloads")
+                Text(if (isSaved) text.saved else text.saveToDownloads)
             }
 
             OutlinedButton(
                 onClick = onBack,
                 modifier = Modifier.weight(1f)
             ) {
-                Text("Back")
+                Text(text.back)
             }
         }
     }

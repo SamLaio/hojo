@@ -24,10 +24,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import wtf.anurag.hojo.ui.i18n.LocalAppStrings
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FileManagerHeader(currentPath: String, onBack: () -> Unit, onRefresh: () -> Unit) {
+        val text = LocalAppStrings.current
         TopAppBar(
                 title = {
                         Row(
@@ -62,7 +64,7 @@ fun FileManagerHeader(currentPath: String, onBack: () -> Unit, onRefresh: () -> 
                         IconButton(onClick = onBack) {
                                 Icon(
                                         imageVector = Icons.Default.ChevronLeft,
-                                        contentDescription = "Back",
+                                        contentDescription = text.back,
                                         tint = MaterialTheme.colorScheme.onSurface
                                 )
                         }
@@ -71,7 +73,7 @@ fun FileManagerHeader(currentPath: String, onBack: () -> Unit, onRefresh: () -> 
                         IconButton(onClick = onRefresh) {
                                 Icon(
                                         imageVector = Icons.Default.Refresh,
-                                        contentDescription = "Refresh",
+                                        contentDescription = text.refresh,
                                         tint = MaterialTheme.colorScheme.onSurface
                                 )
                         }

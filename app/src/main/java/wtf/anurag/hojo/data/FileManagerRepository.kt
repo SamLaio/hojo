@@ -3,6 +3,10 @@ package wtf.anurag.hojo.data
 import android.util.Log
 import android.webkit.MimeTypeMap
 import com.google.gson.Gson
+import com.google.gson.JsonArray
+import com.google.gson.JsonElement
+import com.google.gson.JsonObject
+import com.google.gson.JsonParser
 import com.google.gson.reflect.TypeToken
 import java.io.File
 import java.io.IOException
@@ -42,6 +46,7 @@ constructor(
     companion object {
         private const val FILE_LIST_PAGE_SIZE = 100
         private const val MAX_FILE_LIST_PAGES = 100
+        private const val FILE_LIST_RESPONSE_PREVIEW_LENGTH = 240
     }
 
     private suspend fun deviceClientOrFallback(): OkHttpClient {
@@ -64,20 +69,7 @@ constructor(
 
                 while (page < MAX_FILE_LIST_PAGES) {
                     val offset = page * FILE_LIST_PAGE_SIZE
-                    val url =
-                            "$baseUrl/api/files?path=$encodedPath&offset=$offset&limit=$FILE_LIST_PAGE_SIZE"
-                    Log.d(TAG, "fetchList -> GET $url")
-
-                    val request = Request.Builder().url(url).build()
-                    val pageItems =
-                            httpClient.newCall(request).execute().use { response ->
-                                Log.d(TAG, "fetchList -> response code: ${response.code}")
-                                if (!response.isSuccessful) {
-                                    throw IOException("List failed: ${response.code}")
-                                }
-                                val json = response.body?.string() ?: "[]"
-                                gson.fromJson<List<FileItem>>(json, fileListType)
-                            }
+                    val pageItems = fetchListPage(httpClient, baseUrl, path, encodedPath, offset, page == 0)
 
                     val pageSignature = pageItems.map { "${it.name}:${it.isDirectory}:${it.size}" }
                     if (page == 0) {
@@ -98,6 +90,165 @@ constructor(
 
                 allItems.sortedWith(compareBy({ !it.isDirectory }, { it.name }))
             }
+
+    private fun fetchListPage(
+            httpClient: OkHttpClient,
+            baseUrl: String,
+            path: String,
+            encodedPath: String,
+            offset: Int,
+            allowFirstPageFallbacks: Boolean
+    ): List<FileItem> {
+        val normalizedBaseUrl = baseUrl.trimEnd('/')
+        val urls =
+                buildList {
+                    add(
+                            "$normalizedBaseUrl/api/files?path=$encodedPath&offset=$offset&limit=$FILE_LIST_PAGE_SIZE"
+                    )
+                    if (allowFirstPageFallbacks) {
+                        add("$normalizedBaseUrl/api/files?path=$encodedPath")
+                        add("$normalizedBaseUrl/api/files?path=$path")
+                    }
+                }.distinct()
+
+        var lastFailure: IOException? = null
+        for (url in urls) {
+            try {
+                Log.d(TAG, "fetchList -> GET $url")
+                val request = Request.Builder().url(url).build()
+                return httpClient.newCall(request).execute().use { response ->
+                    Log.d(TAG, "fetchList -> response code: ${response.code}")
+                    val body = response.body?.string().orEmpty()
+                    if (!response.isSuccessful) {
+                        throw IOException("List failed: ${response.code} ${body.toResponsePreview()}")
+                    }
+                    parseFileListResponse(body)
+                }
+            } catch (e: IOException) {
+                lastFailure = e
+                Log.w(TAG, "fetchList -> failed for $url: ${e.message}")
+            } catch (e: IllegalStateException) {
+                lastFailure = IOException(e.message ?: "Invalid file list response", e)
+                Log.w(TAG, "fetchList -> invalid response for $url: ${e.message}")
+            }
+        }
+
+        throw lastFailure ?: IOException("List failed")
+    }
+
+    private fun parseFileListResponse(json: String): List<FileItem> {
+        val trimmed = json.trim()
+        if (trimmed.isEmpty()) return emptyList()
+
+        val root =
+                try {
+                    JsonParser.parseString(trimmed)
+                } catch (e: Exception) {
+                    throw IOException("Invalid file list response: ${trimmed.toResponsePreview()}", e)
+                }
+
+        val array =
+                when {
+                    root.isJsonArray -> root.asJsonArray
+                    root.isJsonObject -> root.asJsonObject.findFileArray()
+                    root.isJsonPrimitive && root.asJsonPrimitive.isString ->
+                            throw IOException("Device returned: ${root.asString.toResponsePreview()}")
+                    else ->
+                            throw IOException(
+                                    "Unexpected file list response: ${trimmed.toResponsePreview()}"
+                            )
+                }
+
+        return array.mapNotNull { element -> element.toFileItemOrNull() }
+    }
+
+    private fun JsonObject.findFileArray(): JsonArray {
+        val arrayKeys = listOf("files", "items", "data", "list", "entries", "results")
+        for (key in arrayKeys) {
+            val element = get(key)
+            if (element?.isJsonArray == true) return element.asJsonArray
+        }
+
+        val messageKeys = listOf("error", "message", "msg", "detail")
+        for (key in messageKeys) {
+            val element = get(key)
+            if (element?.isJsonPrimitive == true && element.asJsonPrimitive.isString) {
+                throw IOException("Device returned: ${element.asString.toResponsePreview()}")
+            }
+        }
+
+        throw IOException("Unexpected file list response: ${toString().toResponsePreview()}")
+    }
+
+    private fun JsonElement.toFileItemOrNull(): FileItem? {
+        if (!isJsonObject) return null
+        val item = asJsonObject
+
+        val name = item.stringValue("name", "filename", "fileName", "path") ?: return null
+        val isDirectory =
+                item.booleanValue("isDirectory", "isDir", "directory", "dir", "folder")
+                        ?: item.stringValue("type", "kind")?.let { type ->
+                            type.equals("folder", ignoreCase = true) ||
+                                    type.equals("directory", ignoreCase = true) ||
+                                    type.equals("dir", ignoreCase = true)
+                        }
+                        ?: false
+        val isEpub =
+                item.booleanValue("isEpub", "epub")
+                        ?: (!isDirectory && name.endsWith(".epub", ignoreCase = true))
+        val size = item.longValue("size", "bytes", "length")
+
+        return FileItem(name = name, isDirectory = isDirectory, isEpub = isEpub, size = size)
+    }
+
+    private fun JsonObject.stringValue(vararg keys: String): String? {
+        for (key in keys) {
+            val element = get(key)
+            if (element?.isJsonPrimitive == true) {
+                val primitive = element.asJsonPrimitive
+                if (primitive.isString) return primitive.asString
+            }
+        }
+        return null
+    }
+
+    private fun JsonObject.booleanValue(vararg keys: String): Boolean? {
+        for (key in keys) {
+            val element = get(key)
+            if (element?.isJsonPrimitive == true) {
+                val primitive = element.asJsonPrimitive
+                if (primitive.isBoolean) return primitive.asBoolean
+                if (primitive.isString) {
+                    when (primitive.asString.lowercase()) {
+                        "true", "1", "yes", "folder", "directory", "dir" -> return true
+                        "false", "0", "no", "file" -> return false
+                    }
+                }
+            }
+        }
+        return null
+    }
+
+    private fun JsonObject.longValue(vararg keys: String): Long? {
+        for (key in keys) {
+            val element = get(key)
+            if (element?.isJsonPrimitive == true) {
+                val primitive = element.asJsonPrimitive
+                if (primitive.isNumber) return primitive.asLong
+                if (primitive.isString) return primitive.asString.toLongOrNull()
+            }
+        }
+        return null
+    }
+
+    private fun String.toResponsePreview(): String {
+        val singleLine = replace(Regex("\\s+"), " ").trim()
+        return if (singleLine.length <= FILE_LIST_RESPONSE_PREVIEW_LENGTH) {
+            singleLine
+        } else {
+            "${singleLine.take(FILE_LIST_RESPONSE_PREVIEW_LENGTH)}..."
+        }
+    }
 
     suspend fun fetchStatus(baseUrl: String): StorageStatus =
             withContext(Dispatchers.IO) {

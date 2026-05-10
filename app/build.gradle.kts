@@ -20,8 +20,8 @@ android {
         applicationId = "wtf.anurag.hojo.crosspoint"
         minSdk = 30
         targetSdk = 35
-        versionCode = 1
-        versionName = "cpChTyZh.V1"
+        versionCode = 2
+        versionName = "cpChTyZh.V1.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

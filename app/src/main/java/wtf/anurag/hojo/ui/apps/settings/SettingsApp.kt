@@ -16,6 +16,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material3.AlertDialog
@@ -41,6 +42,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import wtf.anurag.hojo.data.repository.LanguageMode
 import wtf.anurag.hojo.data.repository.ThemeMode
 import wtf.anurag.hojo.ui.viewmodels.SettingsViewModel
 
@@ -49,7 +51,10 @@ import wtf.anurag.hojo.ui.viewmodels.SettingsViewModel
 fun SettingsApp(onBack: () -> Unit, viewModel: SettingsViewModel = hiltViewModel()) {
     val context = LocalContext.current
     val themeMode by viewModel.themeMode.collectAsState()
+    val languageMode by viewModel.languageMode.collectAsState()
+    val copy = remember(languageMode) { settingsCopy(languageMode) }
     var showThemeDialog by remember { mutableStateOf(false) }
+    var showLanguageDialog by remember { mutableStateOf(false) }
 
     val packageInfo = context.packageManager.getPackageInfo(context.packageName, 0)
     val versionName = packageInfo.versionName ?: ""
@@ -57,7 +62,7 @@ fun SettingsApp(onBack: () -> Unit, viewModel: SettingsViewModel = hiltViewModel
     if (showThemeDialog) {
         AlertDialog(
                 onDismissRequest = { showThemeDialog = false },
-                title = { Text("Select Theme") },
+                title = { Text(copy.selectTheme) },
                 text = {
                     Column(modifier = Modifier.selectableGroup()) {
                         ThemeMode.entries.forEach { mode ->
@@ -84,9 +89,9 @@ fun SettingsApp(onBack: () -> Unit, viewModel: SettingsViewModel = hiltViewModel
                                 Text(
                                         text =
                                                 when (mode) {
-                                                    ThemeMode.SYSTEM -> "System Default"
-                                                    ThemeMode.LIGHT -> "Light"
-                                                    ThemeMode.DARK -> "Dark"
+                                                    ThemeMode.SYSTEM -> copy.themeSystem
+                                                    ThemeMode.LIGHT -> copy.themeLight
+                                                    ThemeMode.DARK -> copy.themeDark
                                                 },
                                         style = MaterialTheme.typography.bodyLarge,
                                         modifier = Modifier.padding(start = 16.dp)
@@ -96,7 +101,45 @@ fun SettingsApp(onBack: () -> Unit, viewModel: SettingsViewModel = hiltViewModel
                     }
                 },
                 confirmButton = {
-                    TextButton(onClick = { showThemeDialog = false }) { Text("Cancel") }
+                    TextButton(onClick = { showThemeDialog = false }) { Text(copy.cancel) }
+                }
+        )
+    }
+
+    if (showLanguageDialog) {
+        AlertDialog(
+                onDismissRequest = { showLanguageDialog = false },
+                title = { Text(copy.selectLanguage) },
+                text = {
+                    Column(modifier = Modifier.selectableGroup()) {
+                        LanguageMode.entries.forEach { mode ->
+                            Row(
+                                    modifier =
+                                            Modifier.fillMaxWidth()
+                                                    .height(56.dp)
+                                                    .selectable(
+                                                            selected = (mode == languageMode),
+                                                            onClick = {
+                                                                viewModel.setLanguage(mode)
+                                                                showLanguageDialog = false
+                                                            },
+                                                            role = Role.RadioButton
+                                                    )
+                                                    .padding(horizontal = 16.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                RadioButton(selected = (mode == languageMode), onClick = null)
+                                Text(
+                                        text = languageLabel(mode),
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        modifier = Modifier.padding(start = 16.dp)
+                                )
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { showLanguageDialog = false }) { Text(copy.cancel) }
                 }
         )
     }
@@ -104,12 +147,12 @@ fun SettingsApp(onBack: () -> Unit, viewModel: SettingsViewModel = hiltViewModel
     Scaffold(
             topBar = {
                 CenterAlignedTopAppBar(
-                        title = { Text("Settings") },
+                        title = { Text(copy.settings) },
                         navigationIcon = {
                             IconButton(onClick = onBack) {
                                 Icon(
                                         Icons.AutoMirrored.Filled.ArrowBack,
-                                        contentDescription = "Back"
+                                        contentDescription = copy.back
                                 )
                             }
                         },
@@ -124,34 +167,40 @@ fun SettingsApp(onBack: () -> Unit, viewModel: SettingsViewModel = hiltViewModel
     ) { paddingValues ->
         Column(modifier = Modifier.fillMaxSize().padding(paddingValues).padding(16.dp)) {
             // Theme Section (Placeholder for now)
-            SettingsSection(title = "Appearance") {
+            SettingsSection(title = copy.appearance) {
                 SettingsItem(
                         icon = Icons.Default.Palette,
-                        title = "Theme",
+                        title = copy.theme,
                         subtitle =
                                 when (themeMode) {
-                                    ThemeMode.SYSTEM -> "System Default"
-                                    ThemeMode.LIGHT -> "Light"
-                                    ThemeMode.DARK -> "Dark"
+                                    ThemeMode.SYSTEM -> copy.themeSystem
+                                    ThemeMode.LIGHT -> copy.themeLight
+                                    ThemeMode.DARK -> copy.themeDark
                                 },
                         onClick = { showThemeDialog = true }
+                )
+                SettingsItem(
+                        icon = Icons.Default.Language,
+                        title = copy.language,
+                        subtitle = languageLabel(languageMode),
+                        onClick = { showLanguageDialog = true }
                 )
             }
 
             Spacer(modifier = Modifier.height(24.dp))
 
             // About Section
-            SettingsSection(title = "About") {
+            SettingsSection(title = copy.about) {
                 SettingsItem(
                         icon = Icons.Default.Info,
-                        title = "App Version",
+                        title = copy.appVersion,
                         subtitle = versionName,
                         onClick = {}
                 )
                 SettingsItem(
                         icon = Icons.Default.Link,
-                        title = "GitHub Repository",
-                        subtitle = "View source code",
+                        title = copy.githubRepository,
+                        subtitle = copy.viewSourceCode,
                         onClick = {
                             val intent =
                                     Intent(
@@ -211,5 +260,71 @@ fun SettingsItem(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
+    }
+}
+
+private data class SettingsCopy(
+        val settings: String,
+        val back: String,
+        val appearance: String,
+        val theme: String,
+        val selectTheme: String,
+        val themeSystem: String,
+        val themeLight: String,
+        val themeDark: String,
+        val language: String,
+        val selectLanguage: String,
+        val about: String,
+        val appVersion: String,
+        val githubRepository: String,
+        val viewSourceCode: String,
+        val cancel: String
+)
+
+private fun settingsCopy(languageMode: LanguageMode): SettingsCopy {
+    return when (languageMode) {
+        LanguageMode.ZH_TW ->
+                SettingsCopy(
+                        settings = "設定",
+                        back = "返回",
+                        appearance = "外觀",
+                        theme = "主題",
+                        selectTheme = "選擇主題",
+                        themeSystem = "跟隨系統",
+                        themeLight = "淺色",
+                        themeDark = "深色",
+                        language = "語言",
+                        selectLanguage = "選擇語言",
+                        about = "關於",
+                        appVersion = "應用程式版本",
+                        githubRepository = "GitHub 原始碼",
+                        viewSourceCode = "查看原始碼",
+                        cancel = "取消"
+                )
+        LanguageMode.EN ->
+                SettingsCopy(
+                        settings = "Settings",
+                        back = "Back",
+                        appearance = "Appearance",
+                        theme = "Theme",
+                        selectTheme = "Select Theme",
+                        themeSystem = "System Default",
+                        themeLight = "Light",
+                        themeDark = "Dark",
+                        language = "Language",
+                        selectLanguage = "Select Language",
+                        about = "About",
+                        appVersion = "App Version",
+                        githubRepository = "GitHub Repository",
+                        viewSourceCode = "View source code",
+                        cancel = "Cancel"
+                )
+    }
+}
+
+private fun languageLabel(languageMode: LanguageMode): String {
+    return when (languageMode) {
+        LanguageMode.ZH_TW -> "正體中文"
+        LanguageMode.EN -> "English"
     }
 }

@@ -47,6 +47,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import wtf.anurag.hojo.ui.apps.converter.ConverterSettings
+import wtf.anurag.hojo.ui.i18n.LocalAppStrings
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -57,6 +58,7 @@ fun RendererApp(onBack: () -> Unit) {
     var isRendering by remember { mutableStateOf(false) }
     val renderedPages = remember { mutableStateListOf<Bitmap>() }
     val scope = rememberCoroutineScope()
+    val text = LocalAppStrings.current
 
     val launcher = rememberLauncherForActivityResult(
         contract = androidx.activity.result.contract.ActivityResultContracts.OpenDocument()
@@ -106,10 +108,10 @@ fun RendererApp(onBack: () -> Unit) {
     Scaffold(
         topBar = {
             LargeTopAppBar(
-                title = { Text("XTC Renderer") },
+                title = { Text(text.renderer) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.Filled.ArrowBack, contentDescription = text.back)
                     }
                 },
                 colors = TopAppBarDefaults.largeTopAppBarColors(
@@ -132,7 +134,7 @@ fun RendererApp(onBack: () -> Unit) {
                 Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(
-                            "Select an .xtc file to view",
+                            text.selectXtcFilePrompt,
                             style = MaterialTheme.typography.titleMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -143,7 +145,7 @@ fun RendererApp(onBack: () -> Unit) {
                                 containerColor = MaterialTheme.colorScheme.primary
                             )
                         ) {
-                            Text("Select File")
+                            Text(text.selectFile)
                         }
                     }
                 }
@@ -151,11 +153,11 @@ fun RendererApp(onBack: () -> Unit) {
                 // File Info
                 if (fileInfo != null) {
                      Text(
-                        text = "Title: ${fileInfo?.title ?: "Unknown"}",
+                        text = "${text.title}: ${fileInfo?.title ?: text.unknown}",
                         style = MaterialTheme.typography.titleMedium
                     )
                      Text(
-                        text = "Pages: ${renderedPages.size} / ${fileInfo?.pageCount}",
+                        text = "${text.pages}: ${renderedPages.size} / ${fileInfo?.pageCount}",
                         style = MaterialTheme.typography.bodyMedium,
                          color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -183,7 +185,7 @@ fun RendererApp(onBack: () -> Unit) {
                             ) {
                                 Image(
                                     bitmap = bitmap.asImageBitmap(),
-                                    contentDescription = "Page Preview",
+                                    contentDescription = text.pagesPreview,
                                     modifier = Modifier.fillMaxWidth(),
                                     Alignment.Center
                                 )
@@ -211,7 +213,7 @@ fun RendererApp(onBack: () -> Unit) {
                         containerColor = MaterialTheme.colorScheme.secondary
                     )
                 ) {
-                    Text("Close File")
+                    Text(text.closeFile)
                 }
             }
         }

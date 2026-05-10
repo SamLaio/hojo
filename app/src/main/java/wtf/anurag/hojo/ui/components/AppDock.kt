@@ -33,6 +33,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
+import wtf.anurag.hojo.ui.i18n.LocalAppStrings
 import wtf.anurag.hojo.ui.theme.HojoTheme
 
 data class DockAction(
@@ -49,49 +50,50 @@ fun AppDock(
     onToggleLayout: () -> Unit
 ) {
         val colors = HojoTheme.colors
+        val text = LocalAppStrings.current
         val actions =
                 listOf(
                         DockAction(
                                 "File Manager",
-                                "File Manager",
-                                "Browse and manage files",
+                                text.fileManager,
+                                text.fileManagerSub,
                                 Icons.Default.Folder
                         ),
                         DockAction(
                                 "Quick Link",
-                                "Quick Link",
-                                "Push URL to device",
+                                text.quickLink,
+                                text.quickLinkSub,
                                 Icons.Default.Link
                         ),
                         DockAction(
                                 "Wallpaper Editor",
-                                "Wallpaper",
-                                "Customize display",
+                                text.wallpaper,
+                                text.wallpaperSub,
                                 Icons.Default.Image
                         ),
-                        DockAction("Tasks", "Tasks", "Manage uploads", Icons.Default.List),
+                        DockAction("Tasks", text.tasks, text.tasksSub, Icons.Default.List),
                         DockAction(
                                 "Renderer",
-                                "Renderer",
-                                "Test XTC Rendering",
+                                text.renderer,
+                                text.rendererSub,
                                 Icons.Default.Edit // Using Edit icon as placeholder
                         ),
                         DockAction(
                                 "Converter",
-                                "EPUB Converter",
-                                "Convert books to XTC",
+                                text.converter,
+                                text.converterSub,
                                 Icons.Default.Description
                         ),
                         DockAction(
                                 "Settings",
-                                "Settings",
-                                "App preferences",
+                                text.settings,
+                                text.settingsSub,
                                 Icons.Default.Settings
                         ),
                         DockAction(
                                 "Device Settings",
-                                "Device",
-                                "Reader settings",
+                                text.device,
+                                text.deviceSub,
                                 Icons.Default.Tune
                         )
                 )
@@ -105,7 +107,7 @@ fun AppDock(
                         verticalAlignment = Alignment.CenterVertically
                 ) {
                         Text(
-                                text = "QUICK ACTIONS",
+                                text = text.quickActions,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 style = MaterialTheme.typography.labelSmall
                         )
@@ -117,7 +119,7 @@ fun AppDock(
                                         imageVector =
                                                 if (isGridLayout) Icons.Default.List
                                                 else Icons.Default.GridView,
-                                        contentDescription = "Toggle Layout",
+                                        contentDescription = text.toggleLayout,
                                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                         }

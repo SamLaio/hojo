@@ -49,6 +49,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
+import wtf.anurag.hojo.ui.i18n.LocalAppStrings
 
 @Suppress("DEPRECATION")
 @Composable
@@ -63,6 +64,7 @@ fun XtcPreviewScreen(
     var pageCount by remember { mutableStateOf(0) }
     var selectedPageIndex by remember { mutableStateOf<Int?>(null) }
     var isLoading by remember { mutableStateOf(true) }
+    val text = LocalAppStrings.current
 
     LaunchedEffect(file) {
         withContext(Dispatchers.IO) {
@@ -85,13 +87,13 @@ fun XtcPreviewScreen(
                         title = {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text(
-                                        text = fileInfo?.title ?: "Preview",
+                                        text = fileInfo?.title ?: text.preview,
                                         style = MaterialTheme.typography.titleMedium,
                                         maxLines = 1
                                 )
                                 if (fileInfo?.author?.isNotEmpty() == true) {
                                     Text(
-                                            text = "by ${fileInfo?.author}",
+                                            text = text.byAuthor(fileInfo?.author.orEmpty()),
                                             style = MaterialTheme.typography.bodySmall,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                                             maxLines = 1
@@ -101,7 +103,7 @@ fun XtcPreviewScreen(
                         },
                         navigationIcon = {
                             IconButton(onClick = onBack) {
-                                Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
+                                Icon(Icons.Filled.ArrowBack, contentDescription = text.back)
                             }
                         },
                         colors =
@@ -123,7 +125,7 @@ fun XtcPreviewScreen(
             } else if (fileInfo == null) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text(
-                            text = "Failed to load file",
+                            text = text.failedToLoadFile,
                             color = MaterialTheme.colorScheme.error,
                             style = MaterialTheme.typography.bodyLarge
                     )
@@ -140,15 +142,15 @@ fun XtcPreviewScreen(
                                 )
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        InfoRow("Pages", "$pageCount")
-                        InfoRow("File Size", formatFileSize(fileInfo?.totalSize ?: 0))
-                        InfoRow("Format", "XTC (E-Paper)")
+                        InfoRow(text.pages, "$pageCount")
+                        InfoRow(text.fileSize, formatFileSize(fileInfo?.totalSize ?: 0))
+                        InfoRow(text.format, "XTC (E-Paper)")
                     }
                 }
 
                 // Page thumbnails
                 Text(
-                        text = "Pages Preview",
+                        text = text.pagesPreview,
                         color = MaterialTheme.colorScheme.onSurface,
                         style = MaterialTheme.typography.titleMedium,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
@@ -279,7 +281,7 @@ fun XtcPreviewScreen(
                                 modifier = Modifier.size(20.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text(if (isSaved) "Saved" else "Save")
+                        Text(if (isSaved) text.saved else text.save)
                     }
 
                     Button(onClick = onUpload, modifier = Modifier.weight(1f)) {
@@ -289,7 +291,7 @@ fun XtcPreviewScreen(
                                 modifier = Modifier.size(20.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Upload")
+                        Text(text.upload)
                     }
                 }
             }
@@ -339,6 +341,7 @@ fun PageThumbnail(
         visibleIndices: Set<Int>,
         modifier: Modifier = Modifier
 ) {
+    val text = LocalAppStrings.current
     var bitmap by remember { mutableStateOf<Bitmap?>(null) }
     var isLoading by remember { mutableStateOf(false) }
     var failed by remember { mutableStateOf(false) }
@@ -467,7 +470,7 @@ fun PageThumbnail(
                 bitmap != null -> {
                     Image(
                             bitmap = bitmap!!.asImageBitmap(),
-                            contentDescription = "Page ${pageIndex + 1}",
+                            contentDescription = text.pageContentDescription(pageIndex + 1),
                             modifier = Modifier.fillMaxSize().padding(8.dp),
                             contentScale = ContentScale.Fit
                     )
@@ -478,14 +481,14 @@ fun PageThumbnail(
                             modifier = Modifier.align(Alignment.Center),
                             horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        Text(text = "Failed to load", color = MaterialTheme.colorScheme.error)
+                        Text(text = text.failedToLoad, color = MaterialTheme.colorScheme.error)
                         Spacer(modifier = Modifier.height(8.dp))
-                        TextButton(onClick = { loadKey++ }) { Text("Retry") }
+                        TextButton(onClick = { loadKey++ }) { Text(text.retry) }
                     }
                 }
                 else -> {
                     Text(
-                            text = "Failed to load",
+                            text = text.failedToLoad,
                             color = MaterialTheme.colorScheme.error,
                             modifier = Modifier.align(Alignment.Center)
                     )
@@ -518,6 +521,7 @@ fun FullPagePreviewDialog(
         onDismiss: () -> Unit,
         onNavigate: (Int) -> Unit
 ) {
+    val text = LocalAppStrings.current
     var bitmap by remember(pageIndex) { mutableStateOf<Bitmap?>(null) }
     var isLoading by remember(pageIndex) { mutableStateOf(true) }
 
@@ -549,14 +553,14 @@ fun FullPagePreviewDialog(
                     verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                        text = "Page ${pageIndex + 1} of $pageCount",
+                        text = text.pageOf(pageIndex + 1, pageCount),
                         color = MaterialTheme.colorScheme.onSurface,
                         style = MaterialTheme.typography.titleMedium
                 )
                 IconButton(onClick = onDismiss) {
                     Icon(
                             Icons.Filled.Close,
-                            contentDescription = "Close",
+                            contentDescription = text.close,
                             tint = MaterialTheme.colorScheme.onSurface
                     )
                 }
@@ -587,14 +591,14 @@ fun FullPagePreviewDialog(
                     bitmap != null -> {
                         Image(
                                 bitmap = bitmap!!.asImageBitmap(),
-                                contentDescription = "Page ${pageIndex + 1}",
+                                contentDescription = text.pageContentDescription(pageIndex + 1),
                                 modifier = Modifier.fillMaxSize().padding(8.dp),
                                 contentScale = ContentScale.Fit
                         )
                     }
                     else -> {
                         Text(
-                                text = "Failed to load page",
+                                text = text.failedToLoadPage,
                                 color = MaterialTheme.colorScheme.error,
                                 modifier = Modifier.align(Alignment.Center)
                         )
@@ -608,13 +612,13 @@ fun FullPagePreviewDialog(
                     horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 TextButton(onClick = { onNavigate(pageIndex - 1) }, enabled = pageIndex > 0) {
-                    Text("← Previous")
+                    Text(text.previous)
                 }
 
                 TextButton(
                         onClick = { onNavigate(pageIndex + 1) },
                         enabled = pageIndex < pageCount - 1
-                ) { Text("Next →") }
+                ) { Text(text.next) }
             }
         }
     }

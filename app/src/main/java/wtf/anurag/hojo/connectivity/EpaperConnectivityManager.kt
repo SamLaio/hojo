@@ -89,7 +89,7 @@ class EpaperConnectivityManager @Inject constructor(
                 name = "CrossPoint",
                 ssid = "CrossPoint-Reader",
                 passphrase = null,
-                hotspotBaseUrl = "http://192.168.4.1",
+                hotspotBaseUrl = "http://crosspoint.local/",
                 lanHost = "crosspoint.local",
                 hostName = "crosspoint",
                 ipPrefixes = listOf("192.168.4.")

@@ -19,7 +19,7 @@ class DefaultConnectivityRepository @Inject constructor(
     private val fileManagerRepository: FileManagerRepository
 ) : ConnectivityRepository {
     companion object {
-        private const val DEFAULT_DEVICE_BASE_URL = "http://192.168.4.1"
+        private const val DEFAULT_DEVICE_BASE_URL = "http://crosspoint.local/"
         private const val PREFS_NAME = "connectivity"
         private const val PREF_MANUAL_ENDPOINT = "manual_endpoint"
     }

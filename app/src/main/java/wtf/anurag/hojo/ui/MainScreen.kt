@@ -21,6 +21,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -52,6 +53,9 @@ import wtf.anurag.hojo.ui.components.StatusWidget
 import wtf.anurag.hojo.ui.viewmodels.ConnectivityViewModel
 import wtf.anurag.hojo.ui.viewmodels.MainViewModel
 import wtf.anurag.hojo.ui.viewmodels.QuickLinkViewModel
+import wtf.anurag.hojo.ui.viewmodels.SettingsViewModel
+import wtf.anurag.hojo.ui.i18n.LocalAppStrings
+import wtf.anurag.hojo.ui.i18n.appStrings
 
 @Composable
 fun MainScreen() {
@@ -67,6 +71,9 @@ fun MainScreen() {
                 } else {
                         null
                 }
+        val settingsViewModel: SettingsViewModel = hiltViewModel()
+        val languageMode by settingsViewModel.languageMode.collectAsState()
+        val strings = remember(languageMode) { appStrings(languageMode) }
 
         val isConnected by
                 if (connectivityViewModel != null) {
@@ -75,6 +82,7 @@ fun MainScreen() {
                         remember { mutableStateOf(false) }
                 }
 
+        CompositionLocalProvider(LocalAppStrings provides strings) {
         Scaffold(
                 contentWindowInsets = WindowInsets(0, 0, 0, 0),
                 bottomBar = {
@@ -119,6 +127,7 @@ fun MainScreen() {
                                 val connectivityViewModel: ConnectivityViewModel = hiltViewModel()
                                 val quickLinkViewModel: QuickLinkViewModel = hiltViewModel()
                                 val mainViewModel: MainViewModel = hiltViewModel()
+                                val text = LocalAppStrings.current
 
                                 val isGridLayout by mainViewModel.isGridLayout.collectAsState()
 
@@ -328,11 +337,11 @@ fun MainScreen() {
                                                                 connectivityViewModel
                                                                         .dismissManualEndpointPrompt()
                                                         },
-                                                        title = { Text("Set CrossPoint URL") },
+                                                        title = { Text(text.setCrossPointUrl) },
                                                         text = {
                                                                 Column {
                                                                         Text(
-                                                                                "Cannot connect to the default http://192.168.4.1. Enter this device's LAN URL."
+                                                                                text.crossPointUrlPrompt
                                                                         )
                                                                         Spacer(
                                                                                 modifier =
@@ -380,7 +389,7 @@ fun MainScreen() {
                                                                                 }
                                                                         }
                                                                 ) {
-                                                                        Text("Connect")
+                                                                        Text(text.connect)
                                                                 }
                                                         },
                                                         dismissButton = {
@@ -390,7 +399,7 @@ fun MainScreen() {
                                                                                         .dismissManualEndpointPrompt()
                                                                         }
                                                                 ) {
-                                                                        Text("Cancel")
+                                                                        Text(text.cancel)
                                                                 }
                                                         }
                                                 )
@@ -482,6 +491,7 @@ fun MainScreen() {
                                 }
                         ) {
                                 val connectivityViewModel: ConnectivityViewModel = hiltViewModel()
+                                val text = LocalAppStrings.current
 
                                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                                         ConverterApp(
@@ -494,11 +504,11 @@ fun MainScreen() {
                                                 horizontalAlignment = Alignment.CenterHorizontally
                                         ) {
                                                 Text(
-                                                        "Converter requires Android 10 (API 29) or newer."
+                                                        text.converterRequiresAndroid10
                                                 )
                                                 Spacer(modifier = Modifier.height(12.dp))
                                                 Button(onClick = { navController.popBackStack() }) {
-                                                        Text("Back")
+                                                        Text(text.back)
                                                 }
                                         }
                                 }
@@ -617,5 +627,6 @@ fun MainScreen() {
                         ) { RendererApp(onBack = { navController.popBackStack() }) }
 
                 }
+        }
         }
 }

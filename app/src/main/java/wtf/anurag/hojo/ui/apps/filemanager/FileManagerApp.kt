@@ -14,11 +14,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.navigation.compose.hiltViewModel
+import wtf.anurag.hojo.ui.i18n.LocalAppStrings
 import wtf.anurag.hojo.ui.viewmodels.FileManagerViewModel
 
 @Composable
 fun FileManagerApp(onBack: () -> Unit) {
     val context = LocalContext.current
+    val text = LocalAppStrings.current
 
     // Use the Compose viewModel() helper so we don't pass incorrect constructor arguments here.
     val fileManagerViewModel: FileManagerViewModel = hiltViewModel()
@@ -97,17 +99,17 @@ fun FileManagerApp(onBack: () -> Unit) {
             visible = modalVisible,
             title =
                     when (modalMode) {
-                        "create" -> "New Folder"
-                        "move" -> "Move File"
-                        else -> "Rename Item"
+                        "create" -> text.newFolder
+                        "move" -> text.moveFile
+                        else -> text.renameItem
                     },
             value = inputText,
-            placeholder = if (modalMode == "move") "Destination folder path..." else "Enter name...",
+            placeholder = if (modalMode == "move") text.destinationFolderPath else text.enterName,
             submitLabel =
                     when (modalMode) {
-                        "create" -> "Create"
-                        "move" -> "Move"
-                        else -> "Rename"
+                        "create" -> text.create
+                        "move" -> text.move
+                        else -> text.rename
                     },
             onClose = { fileManagerViewModel.setModalVisible(false) },
             onChangeText = { fileManagerViewModel.setInputText(it) },
