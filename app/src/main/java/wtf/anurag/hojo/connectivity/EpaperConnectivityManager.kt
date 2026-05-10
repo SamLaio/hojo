@@ -60,23 +60,56 @@ import kotlin.coroutines.resumeWithException
 @Singleton
 @RequiresApi(Build.VERSION_CODES.Q)
 class EpaperConnectivityManager @Inject constructor(
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
+    private val networkBoundClientFactory: NetworkBoundClientFactory
 ) {
+    private data class DeviceProfile(
+        val name: String,
+        val ssid: String,
+        val passphrase: String?,
+        val hotspotBaseUrl: String,
+        val lanHost: String,
+        val hostName: String,
+        val ipPrefixes: List<String>
+    ) {
+        val hotspotHost: String
+            get() = hotspotBaseUrl
+                .removePrefix("http://")
+                .removePrefix("https://")
+                .substringBefore(":")
+    }
 
     companion object {
         private const val TAG = "EpaperConnectivity"
 
         // Device Configuration
-        private const val EPAPER_SSID = "E-Paper"
-        private const val EPAPER_PASSWORD = "12345678"
-        private const val EPAPER_IP = "192.168.3.3"
         private const val EPAPER_PORT = 80
-        private const val DEVICE_HOST_NAME = "crosspoint"
-        private const val DEVICE_LAN_HOST = "crosspoint.local"
+        private val DEVICE_PROFILES = listOf(
+            DeviceProfile(
+                name = "CrossPoint",
+                ssid = "CrossPoint-Reader",
+                passphrase = null,
+                hotspotBaseUrl = "http://192.168.4.1",
+                lanHost = "crosspoint.local",
+                hostName = "crosspoint",
+                ipPrefixes = listOf("192.168.4.")
+            ),
+            DeviceProfile(
+                name = "XTEINK",
+                ssid = "E-Paper",
+                passphrase = "12345678",
+                hotspotBaseUrl = "http://192.168.3.3",
+                lanHost = "crosspoint.local",
+                hostName = "crosspoint",
+                ipPrefixes = listOf("192.168.3.", "192.168.4.", "10.0.0.")
+            )
+        )
+        private val DEFAULT_DEVICE_PROFILE = DEVICE_PROFILES.first()
 
         // Network Segments (for detecting E-Paper WiFi)
-        private const val WIFI_NETWORK_SEGMENT = "192.168.3."
-        private val DEVICE_IP_PREFIXES = listOf("192.168.4.", "10.0.0.")
+        private val DEVICE_IP_PREFIXES = DEVICE_PROFILES
+            .flatMap { it.ipPrefixes }
+            .distinct()
 
         // Timeouts
         private const val SOCKET_TIMEOUT_MS = 5000
@@ -109,7 +142,9 @@ class EpaperConnectivityManager @Inject constructor(
     private val _connectionMode = MutableStateFlow(ConnectionMode.HOTSPOT)
     val connectionMode = _connectionMode.asStateFlow()
 
-    private val _currentBaseUrl = MutableStateFlow("http://$EPAPER_IP")
+    private val _activeDeviceProfile = MutableStateFlow(DEFAULT_DEVICE_PROFILE)
+
+    private val _currentBaseUrl = MutableStateFlow(DEFAULT_DEVICE_PROFILE.hotspotBaseUrl)
     val currentBaseUrl = _currentBaseUrl.asStateFlow()
 
     private val _lastResolvedIp = MutableStateFlow<String?>(null)
@@ -237,8 +272,10 @@ class EpaperConnectivityManager @Inject constructor(
      */
     fun isDeviceApi(url: String): Boolean {
         return DEVICE_IP_PREFIXES.any { url.contains(it, ignoreCase = true) } ||
-                url.contains(DEVICE_LAN_HOST, ignoreCase = true) ||
-                url.contains(DEVICE_HOST_NAME, ignoreCase = true)
+                DEVICE_PROFILES.any { profile ->
+                    url.contains(profile.lanHost, ignoreCase = true) ||
+                            url.contains(profile.hostName, ignoreCase = true)
+                }
     }
 
     /**
@@ -319,7 +356,7 @@ class EpaperConnectivityManager @Inject constructor(
                 val linkProperties = connectivityManager.getLinkProperties(network)
                 linkProperties?.linkAddresses?.forEach { linkAddress ->
                     val hostAddress = linkAddress.address.hostAddress ?: return@forEach
-                    if (hostAddress.startsWith(WIFI_NETWORK_SEGMENT)) {
+                    if (DEVICE_IP_PREFIXES.any { hostAddress.startsWith(it) }) {
                         Log.d(TAG, "Confirmed E-Paper WiFi (IP: $hostAddress)")
                     }
                 }
@@ -330,7 +367,7 @@ class EpaperConnectivityManager @Inject constructor(
             val linkProperties = connectivityManager.getLinkProperties(network)
             linkProperties?.linkAddresses?.forEach { linkAddress ->
                 val hostAddress = linkAddress.address.hostAddress ?: return@forEach
-                if (hostAddress.startsWith(WIFI_NETWORK_SEGMENT)) {
+                if (DEVICE_IP_PREFIXES.any { hostAddress.startsWith(it) }) {
                     Log.d(TAG, "Detected E-Paper WiFi by IP range: $hostAddress")
                     return true
                 }
@@ -418,6 +455,7 @@ class EpaperConnectivityManager @Inject constructor(
                 linkProperties.linkAddresses.forEach { linkAddress ->
                     val hostAddress = linkAddress.address.hostAddress ?: return@forEach
                     if (DEVICE_IP_PREFIXES.any { hostAddress.startsWith(it) }) {
+                        _activeDeviceProfile.value = profileForAddress(hostAddress)
                         Log.d(TAG, "Found E-Paper network: $hostAddress")
                         return network
                     }
@@ -430,6 +468,37 @@ class EpaperConnectivityManager @Inject constructor(
             Log.e(TAG, "Error selecting device network", e)
             null
         }
+    }
+
+    suspend fun getDeviceNetworkOrNull(): Network? = withContext(Dispatchers.IO) {
+        if (isEmulator) {
+            Log.d(TAG, "getDeviceNetworkOrNull -> skipping on emulator")
+            return@withContext null
+        }
+
+        epaperNetwork?.let { return@withContext it }
+
+        if (_connectionMode.value == ConnectionMode.LAN && _discoveredDeviceIp.value != null) {
+            connectivityManager.activeNetwork?.let { activeNetwork ->
+                Log.d(TAG, "Using active network for LAN device endpoint")
+                return@withContext activeNetwork
+            }
+        }
+
+        return@withContext selectDeviceNetwork()
+    }
+
+    suspend fun getInternetNetworkOrNull(): Network? = withContext(Dispatchers.IO) {
+        if (isEmulator) {
+            Log.d(TAG, "getInternetNetworkOrNull -> skipping on emulator")
+            return@withContext null
+        }
+
+        return@withContext selectInternetNetwork()
+    }
+
+    fun createNetworkBoundClient(network: Network): OkHttpClient {
+        return networkBoundClientFactory.create(network)
     }
 
     // ========================
@@ -579,11 +648,37 @@ class EpaperConnectivityManager @Inject constructor(
             requestPermissionsIfNeeded(activity)
         }
 
-        return@withContext suspendCancellableCoroutine { continuation ->
+        for (profile in DEVICE_PROFILES) {
+            _activeDeviceProfile.value = profile
+            useHotspotEndpoint()
+            Log.d(TAG, "connectToEpaperHotspot -> trying ${profile.name} hotspot (${profile.ssid})")
+            if (requestHotspotNetwork(profile)) {
+                return@withContext true
+            }
+        }
+
+        return@withContext false
+    }
+
+    private suspend fun requestHotspotNetwork(profile: DeviceProfile): Boolean =
+        suspendCancellableCoroutine { continuation ->
             try {
+                networkCallback?.let {
+                    try {
+                        connectivityManager.unregisterNetworkCallback(it)
+                    } catch (e: Exception) {
+                        Log.d(TAG, "Previous hotspot callback was already unregistered")
+                    }
+                }
+                networkCallback = null
+
                 val wifiNetworkSpecifier = WifiNetworkSpecifier.Builder()
-                    .setSsid(EPAPER_SSID)
-                    .setWpa2Passphrase(EPAPER_PASSWORD)
+                    .setSsid(profile.ssid)
+                    .apply {
+                        profile.passphrase
+                            ?.takeIf { it.isNotBlank() }
+                            ?.let { setWpa2Passphrase(it) }
+                    }
                     .build()
 
                 val networkRequest = NetworkRequest.Builder()
@@ -596,15 +691,16 @@ class EpaperConnectivityManager @Inject constructor(
                     override fun onAvailable(network: Network) {
                         super.onAvailable(network)
                         epaperNetwork = network
+                        _activeDeviceProfile.value = profile
                         _isConnected.value = true
                         startMonitoring()
-                        Log.d(TAG, "onAvailable: epaper network available: $network")
+                        Log.d(TAG, "onAvailable: ${profile.name} network available: $network")
                         if (continuation.isActive) continuation.resume(true)
                     }
 
                     override fun onUnavailable() {
                         super.onUnavailable()
-                        Log.d(TAG, "onUnavailable: failed to find epaper network")
+                        Log.d(TAG, "onUnavailable: failed to find ${profile.name} network")
                         if (continuation.isActive) continuation.resume(false)
                     }
 
@@ -619,13 +715,16 @@ class EpaperConnectivityManager @Inject constructor(
                     }
                 }
 
-                connectivityManager.requestNetwork(networkRequest, networkCallback!!)
+                connectivityManager.requestNetwork(
+                    networkRequest,
+                    networkCallback!!,
+                    HOTSPOT_DISCOVERY_TIMEOUT_MS.toInt()
+                )
             } catch (e: Exception) {
                 Log.e(TAG, "connectToEpaperHotspot -> exception", e)
                 if (continuation.isActive) continuation.resumeWithException(e)
             }
         }
-    }
 
     private suspend fun requestPermissionsIfNeeded(activity: Activity) {
         val permissions = mutableListOf<String>()
@@ -780,7 +879,7 @@ class EpaperConnectivityManager @Inject constructor(
         }
 
         try {
-            val ip = _discoveredDeviceIp.value ?: EPAPER_IP
+            val ip = _discoveredDeviceIp.value ?: activeHotspotHost()
             val socket = Socket()
             val socketAddress = InetSocketAddress(ip, EPAPER_PORT)
             socket.connect(socketAddress, SOCKET_TIMEOUT_MS)
@@ -872,9 +971,23 @@ class EpaperConnectivityManager @Inject constructor(
         }
     }
 
+    private fun activeHotspotHost(): String {
+        return _activeDeviceProfile.value.hotspotHost
+    }
+
+    private fun activeLanHost(): String {
+        return _activeDeviceProfile.value.lanHost
+    }
+
+    private fun profileForAddress(address: String): DeviceProfile {
+        return DEVICE_PROFILES.firstOrNull { profile ->
+            profile.ipPrefixes.any { address.startsWith(it) }
+        } ?: DEFAULT_DEVICE_PROFILE
+    }
+
     private suspend fun pingEpaperStatus(): Boolean = withContext(Dispatchers.IO) {
         try {
-            val ip = _discoveredDeviceIp.value ?: EPAPER_IP
+            val ip = _discoveredDeviceIp.value ?: activeHotspotHost()
             val url = URL("http://$ip/api/status")
             val connection = url.openConnection() as HttpURLConnection
             connection.connectTimeout = PING_TIMEOUT_MS
@@ -1210,12 +1323,13 @@ class EpaperConnectivityManager @Inject constructor(
 
     private fun probeHttpWithCustomDns(resolvedIp: String): Boolean {
         return try {
+            val lanHost = activeLanHost()
             val client = OkHttpClient.Builder()
                 .connectTimeout(HTTP_TIMEOUT_MS, TimeUnit.MILLISECONDS)
                 .readTimeout(HTTP_TIMEOUT_MS, TimeUnit.MILLISECONDS)
                 .dns(object : Dns {
                     override fun lookup(hostname: String): List<InetAddress> {
-                        return if (hostname == DEVICE_LAN_HOST) {
+                        return if (hostname == lanHost) {
                             Log.d(TAG, "Custom DNS: $hostname -> $resolvedIp")
                             listOf(InetAddress.getByName(resolvedIp))
                         } else {
@@ -1226,7 +1340,7 @@ class EpaperConnectivityManager @Inject constructor(
                 .build()
 
             val request = Request.Builder()
-                .url("http://$DEVICE_LAN_HOST/api/status")
+                .url("http://$lanHost/api/status")
                 .get()
                 .build()
 
@@ -1262,7 +1376,7 @@ class EpaperConnectivityManager @Inject constructor(
      */
     fun useHotspotEndpoint() {
         _connectionMode.value = ConnectionMode.HOTSPOT
-        _currentBaseUrl.value = "http://$EPAPER_IP"
+        _currentBaseUrl.value = _activeDeviceProfile.value.hotspotBaseUrl
         _lastResolvedIp.value = null
         Log.i(TAG, "Switched to hotspot mode: baseUrl=${_currentBaseUrl.value}")
     }
@@ -1281,7 +1395,8 @@ class EpaperConnectivityManager @Inject constructor(
         return object : Dns {
             override fun lookup(hostname: String): List<InetAddress> {
                 val resolvedIp = _lastResolvedIp.value
-                return if (hostname == DEVICE_LAN_HOST && resolvedIp != null) {
+                val lanHost = activeLanHost()
+                return if (hostname == lanHost && resolvedIp != null) {
                     Log.d(TAG, "LAN DNS: $hostname -> $resolvedIp")
                     listOf(InetAddress.getByName(resolvedIp))
                 } else {
@@ -1334,8 +1449,8 @@ class EpaperConnectivityManager @Inject constructor(
 
         return mapOf(
             "connected" to (network != null),
-            "ssid" to EPAPER_SSID,
-            "targetIp" to (_discoveredDeviceIp.value ?: EPAPER_IP),
+            "ssid" to _activeDeviceProfile.value.ssid,
+            "targetIp" to (_discoveredDeviceIp.value ?: activeHotspotHost()),
             "targetPort" to EPAPER_PORT,
             "connectionMode" to _connectionMode.value.name,
             "baseUrl" to _currentBaseUrl.value,

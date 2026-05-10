@@ -77,7 +77,7 @@ constructor(
     private val _modalVisible = MutableStateFlow(false)
     val modalVisible: StateFlow<Boolean> = _modalVisible.asStateFlow()
 
-    private val _modalMode = MutableStateFlow("create") // "create" or "rename"
+    private val _modalMode = MutableStateFlow("create") // "create", "rename", or "move"
     val modalMode: StateFlow<String> = _modalMode.asStateFlow()
 
     private val _inputText = MutableStateFlow("")
@@ -149,9 +149,36 @@ constructor(
     }
 
     fun handleRename(item: FileItem) {
+        if (item.isDirectory) {
+            android.widget.Toast.makeText(
+                            getApplication(),
+                            "CrossPoint only supports renaming files",
+                            android.widget.Toast.LENGTH_SHORT
+                    )
+                    .show()
+            return
+        }
+
         _modalMode.value = "rename"
         selectedItem = item
         _inputText.value = item.name
+        _modalVisible.value = true
+    }
+
+    fun handleMove(item: FileItem) {
+        if (item.isDirectory) {
+            android.widget.Toast.makeText(
+                            getApplication(),
+                            "CrossPoint only supports moving files",
+                            android.widget.Toast.LENGTH_SHORT
+                    )
+                    .show()
+            return
+        }
+
+        _modalMode.value = "move"
+        selectedItem = item
+        _inputText.value = _currentPath.value
         _modalVisible.value = true
     }
 
@@ -203,6 +230,11 @@ constructor(
                             if (_currentPath.value == "/") "/${_inputText.value}"
                             else "${_currentPath.value}/${_inputText.value}"
                     repository.renameItem(baseUrl, oldPath, newPath)
+                } else if (_modalMode.value == "move" && selectedItem != null) {
+                    val oldPath =
+                            if (_currentPath.value == "/") "/${selectedItem!!.name}"
+                            else "${_currentPath.value}/${selectedItem!!.name}"
+                    repository.moveItem(baseUrl, oldPath, normalizeFolderPath(_inputText.value))
                 }
                 _modalVisible.value = false
                 loadFiles()
@@ -219,6 +251,15 @@ constructor(
 
     fun setModalVisible(visible: Boolean) {
         _modalVisible.value = visible
+    }
+
+    private fun normalizeFolderPath(path: String): String {
+        val trimmed = path.trim()
+        return when {
+            trimmed.isBlank() -> "/"
+            trimmed.startsWith("/") -> trimmed
+            else -> "/$trimmed"
+        }
     }
 
     fun handleDownload(item: FileItem) {

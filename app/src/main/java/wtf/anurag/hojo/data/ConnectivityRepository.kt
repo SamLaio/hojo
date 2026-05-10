@@ -9,9 +9,13 @@ interface ConnectivityRepository {
     val deviceBaseUrl: StateFlow<String>
     val storageStatus: StateFlow<StorageStatus?>
     val isDiscovering: StateFlow<Boolean>
+    val manualEndpointRequested: StateFlow<Boolean>
+    val manualEndpointError: StateFlow<String?>
 
     suspend fun checkConnection()
     suspend fun handleConnect(silent: Boolean = false)
+    suspend fun submitManualEndpoint(url: String)
+    fun dismissManualEndpointPrompt()
     suspend fun updateDeviceStatus()
     suspend fun disconnect()
 

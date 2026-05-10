@@ -50,6 +50,7 @@ fun FileGrid(
         isLoading: Boolean,
         onNavigate: (FileItem) -> Unit,
         onRename: (FileItem) -> Unit,
+        onMove: (FileItem) -> Unit,
         onDelete: (FileItem) -> Unit,
         onDownload: (FileItem) -> Unit,
         errorMessage: String? = null
@@ -192,13 +193,22 @@ fun FileGrid(
                                                         expanded = showMenu,
                                                         onDismissRequest = { showMenu = false }
                                                 ) {
-                                                        DropdownMenuItem(
-                                                                text = { Text("Rename") },
-                                                                onClick = {
-                                                                        showMenu = false
-                                                                        onRename(item)
-                                                                }
-                                                        )
+                                                        if (!item.isDirectory) {
+                                                                DropdownMenuItem(
+                                                                        text = { Text("Rename") },
+                                                                        onClick = {
+                                                                                showMenu = false
+                                                                                onRename(item)
+                                                                        }
+                                                                )
+                                                                DropdownMenuItem(
+                                                                        text = { Text("Move") },
+                                                                        onClick = {
+                                                                                showMenu = false
+                                                                                onMove(item)
+                                                                        }
+                                                                )
+                                                        }
                                                         DropdownMenuItem(
                                                                 text = { Text("Download") },
                                                                 onClick = {

@@ -11,10 +11,26 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
+import wtf.anurag.hojo.connectivity.EpaperConnectivityManager
 import wtf.anurag.hojo.data.model.DeviceSetting
 
-class DeviceSettingsRepository @Inject constructor(private val client: OkHttpClient) {
+class DeviceSettingsRepository
+@Inject
+constructor(
+        private val client: OkHttpClient,
+        private val connectivityManager: EpaperConnectivityManager
+) {
     private val TAG = "DeviceSettingsRepo"
+
+    private suspend fun deviceClientOrFallback(): OkHttpClient {
+        val network = connectivityManager.getDeviceNetworkOrNull()
+        return if (network != null) {
+            connectivityManager.createNetworkBoundClient(network)
+        } else {
+            Log.d(TAG, "No device network available, falling back to shared OkHttpClient")
+            client
+        }
+    }
 
     suspend fun fetchSettings(baseUrl: String): List<DeviceSetting> =
             withContext(Dispatchers.IO) {
@@ -22,7 +38,7 @@ class DeviceSettingsRepository @Inject constructor(private val client: OkHttpCli
                 Log.d(TAG, "fetchSettings -> GET $url")
 
                 val request = Request.Builder().url(url).build()
-                client.newCall(request).execute().use { response ->
+                deviceClientOrFallback().newCall(request).execute().use { response ->
                     Log.d(TAG, "fetchSettings -> response code: ${response.code}")
                     if (!response.isSuccessful) throw IOException("Settings fetch failed: ${response.code}")
                     val json = response.body?.string() ?: "[]"
@@ -49,7 +65,7 @@ class DeviceSettingsRepository @Inject constructor(private val client: OkHttpCli
                         .post(body.toRequestBody("application/json".toMediaType()))
                         .build()
 
-                client.newCall(request).execute().use { response ->
+                deviceClientOrFallback().newCall(request).execute().use { response ->
                     Log.d(TAG, "updateSettings -> response code: ${response.code}")
                     if (!response.isSuccessful) {
                         val err = response.body?.string() ?: response.code.toString()

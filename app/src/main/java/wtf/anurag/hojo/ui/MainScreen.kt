@@ -14,14 +14,18 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -43,6 +47,7 @@ import wtf.anurag.hojo.ui.apps.tasks.TasksApp
 import wtf.anurag.hojo.ui.apps.wallpaper.WallpaperEditor
 import wtf.anurag.hojo.ui.components.AppDock
 import wtf.anurag.hojo.ui.components.ConnectivityBottomBar
+import wtf.anurag.hojo.ui.components.NotificationPermissionEffect
 import wtf.anurag.hojo.ui.components.StatusWidget
 import wtf.anurag.hojo.ui.viewmodels.ConnectivityViewModel
 import wtf.anurag.hojo.ui.viewmodels.MainViewModel
@@ -50,6 +55,8 @@ import wtf.anurag.hojo.ui.viewmodels.QuickLinkViewModel
 
 @Composable
 fun MainScreen() {
+        NotificationPermissionEffect()
+
         val navController = rememberNavController()
         val navBackStackEntry by navController.currentBackStackEntryAsState()
         val currentRoute = navBackStackEntry?.destination?.route
@@ -171,6 +178,26 @@ fun MainScreen() {
                                         } else {
                                                 remember { mutableStateOf<File?>(null) }
                                         }
+
+                                val manualEndpointRequested by
+                                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                                                connectivityViewModel
+                                                        .manualEndpointRequested
+                                                        .collectAsState()
+                                        } else {
+                                                remember { mutableStateOf(false) }
+                                        }
+
+                                val manualEndpointError by
+                                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                                                connectivityViewModel
+                                                        .manualEndpointError
+                                                        .collectAsState()
+                                        } else {
+                                                remember { mutableStateOf<String?>(null) }
+                                        }
+
+                                var manualEndpointInput by remember { mutableStateOf("") }
 
                                 // Show preview screen if preview file is available
                                 if (previewFile != null) {
@@ -294,6 +321,80 @@ fun MainScreen() {
                                                 },
                                                 onDismissError = { quickLinkViewModel.clearError() }
                                         )
+
+                                        if (manualEndpointRequested) {
+                                                AlertDialog(
+                                                        onDismissRequest = {
+                                                                connectivityViewModel
+                                                                        .dismissManualEndpointPrompt()
+                                                        },
+                                                        title = { Text("Set CrossPoint URL") },
+                                                        text = {
+                                                                Column {
+                                                                        Text(
+                                                                                "Cannot connect to the default http://192.168.4.1. Enter this device's LAN URL."
+                                                                        )
+                                                                        Spacer(
+                                                                                modifier =
+                                                                                        Modifier
+                                                                                                .height(
+                                                                                                        12.dp
+                                                                                                )
+                                                                        )
+                                                                        OutlinedTextField(
+                                                                                value =
+                                                                                        manualEndpointInput,
+                                                                                onValueChange = {
+                                                                                        manualEndpointInput =
+                                                                                                it
+                                                                                },
+                                                                                singleLine = true,
+                                                                                placeholder = {
+                                                                                        Text(
+                                                                                                "http://192.168.50.202"
+                                                                                        )
+                                                                                }
+                                                                        )
+                                                                        manualEndpointError?.let {
+                                                                                Spacer(
+                                                                                        modifier =
+                                                                                                Modifier
+                                                                                                        .height(
+                                                                                                                8.dp
+                                                                                                        )
+                                                                                )
+                                                                                Text(it)
+                                                                        }
+                                                                }
+                                                        },
+                                                        confirmButton = {
+                                                                TextButton(
+                                                                        onClick = {
+                                                                                if (manualEndpointInput
+                                                                                                .isNotBlank()
+                                                                                ) {
+                                                                                        connectivityViewModel
+                                                                                                .submitManualEndpoint(
+                                                                                                        manualEndpointInput
+                                                                                                )
+                                                                                }
+                                                                        }
+                                                                ) {
+                                                                        Text("Connect")
+                                                                }
+                                                        },
+                                                        dismissButton = {
+                                                                TextButton(
+                                                                        onClick = {
+                                                                                connectivityViewModel
+                                                                                        .dismissManualEndpointPrompt()
+                                                                        }
+                                                                ) {
+                                                                        Text("Cancel")
+                                                                }
+                                                        }
+                                                )
+                                        }
                                 }
                         }
 

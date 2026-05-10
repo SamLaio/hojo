@@ -18,7 +18,8 @@ android {
 
     defaultConfig {
         applicationId = "wtf.anurag.hojo"
-        minSdk = 33
+        minSdk = 30
+        targetSdk = 35
         versionCode = 1
         versionName = "0.0.14-beta"
 
@@ -70,7 +71,9 @@ dependencies {
 
     // --- Hilt ---
     implementation(libs.hilt.android)
-    kapt(libs.hilt.compiler)
+    kapt(libs.hilt.android.compiler)
+    kaptTest(libs.hilt.android.compiler)
+    kaptAndroidTest(libs.hilt.android.compiler)
     implementation(libs.androidx.hilt.navigation.compose)
 
     // --- Third-party Libraries ---
@@ -99,4 +102,10 @@ android {
     // Force a compatible JavaPoet version to avoid runtime conflicts in annotation processors
     // (Hilt)
     configurations.all { resolutionStrategy.force("com.squareup:javapoet:1.13.0") }
+}
+
+// The current unit tests do not use Hilt annotations, but the Hilt Gradle plugin still wires
+// options into unit-test KAPT tasks. Skipping those empty tasks avoids noisy unknown-option warnings.
+tasks.matching { it.name.matches(Regex("kapt.*UnitTestKotlin")) }.configureEach {
+    enabled = false
 }

@@ -31,12 +31,12 @@ Hojo is a native Android application built with Jetpack Compose that provides a 
 - Direct upload to e-paper device
 
 ### 📚 EPUB Converter
-- Convert documents to EPUB format optimized for e-paper displays
+- Convert EPUB documents to XTC format optimized for e-paper displays
 - Customizable font and layout settings
 - Native conversion engine
 
 ### 🔗 Quick Link
-- Convert web articles to EPUB format
+- Convert web articles to XTC format
 - Uploads to /books directory on device for quick content display
 
 ### ⚙️ Settings
@@ -49,8 +49,9 @@ Hojo is a native Android application built with Jetpack Compose that provides a 
 - **Language**: Kotlin
 - **UI Framework**: Jetpack Compose with Material 3
 - **Architecture**: MVVM with ViewModels and StateFlow
-- **Minimum SDK**: 26 (Android 8.0)
-- **Target SDK**: 34 (Android 14)
+- **Minimum SDK**: 33 (Android 13)
+- **Target SDK**: 35
+- **Compile SDK**: 35
 
 ### Key Dependencies
 - AndroidX Core KTX
@@ -60,8 +61,7 @@ Hojo is a native Android application built with Jetpack Compose that provides a 
 - Hilt for dependency injection
 - OkHttp for networking
 - Gson for JSON parsing
-- Jsoup for HTML parsing
-- epublib for EPUB generation
+- WebView with bundled CREngine WASM assets for EPUB/article conversion
 - Android Image Cropper for image editing
 
 ## Project Structure
@@ -70,7 +70,7 @@ Hojo is a native Android application built with Jetpack Compose that provides a 
 app/src/main/java/wtf/anurag/hojo/
 ├── connectivity/          # E-paper device connectivity management
 │   ├── EpaperConnectivityManager.kt
-│   └── SmartNetworkInterceptor.kt
+│   └── NetworkBoundClientFactory.kt
 ├── data/                  # Data models and repositories
 │   ├── model/            # Data classes (FileItem, StorageStatus, etc.)
 │   ├── repository/       # Repositories (ThemeRepository, etc.)
@@ -105,8 +105,8 @@ app/src/main/java/wtf/anurag/hojo/
 
 ### Prerequisites
 - Android Studio Hedgehog or newer
-- JDK 8 or higher
-- Android SDK 34
+- JDK 17 or higher
+- Android SDK 35
 
 ### Build Instructions
 
@@ -118,14 +118,21 @@ cd hojo
 
 2. Open the project in Android Studio
 
-3. Sync Gradle dependencies
+3. Ensure Gradle can find your Android SDK. Android Studio usually creates
+   `local.properties` automatically. If you build from the command line, create
+   `local.properties` in the repository root:
+```properties
+sdk.dir=C:\\Users\\YOUR_USER\\AppData\\Local\\Android\\Sdk
+```
 
-4. Build the project:
+4. Sync Gradle dependencies
+
+5. Build the project:
 ```bash
 ./gradlew build
 ```
 
-5. Run on device/emulator:
+6. Run on device/emulator:
 ```bash
 ./gradlew installDebug
 ```

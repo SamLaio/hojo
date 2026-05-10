@@ -85,6 +85,7 @@ fun FileManagerApp(onBack: () -> Unit) {
                     isLoading = isLoading,
                     onNavigate = { fileManagerViewModel.handleNavigate(it) },
                     onRename = { fileManagerViewModel.handleRename(it) },
+                    onMove = { fileManagerViewModel.handleMove(it) },
                     onDelete = { fileManagerViewModel.handleDelete(it) },
                     onDownload = { fileManagerViewModel.handleDownload(it) },
                     errorMessage = errorMessage
@@ -94,10 +95,20 @@ fun FileManagerApp(onBack: () -> Unit) {
 
     InputModal(
             visible = modalVisible,
-            title = if (modalMode == "create") "New Folder" else "Rename Item",
+            title =
+                    when (modalMode) {
+                        "create" -> "New Folder"
+                        "move" -> "Move File"
+                        else -> "Rename Item"
+                    },
             value = inputText,
-            placeholder = "Enter name...",
-            submitLabel = if (modalMode == "create") "Create" else "Rename",
+            placeholder = if (modalMode == "move") "Destination folder path..." else "Enter name...",
+            submitLabel =
+                    when (modalMode) {
+                        "create" -> "Create"
+                        "move" -> "Move"
+                        else -> "Rename"
+                    },
             onClose = { fileManagerViewModel.setModalVisible(false) },
             onChangeText = { fileManagerViewModel.setInputText(it) },
             onSubmit = { fileManagerViewModel.handleModalSubmit() }

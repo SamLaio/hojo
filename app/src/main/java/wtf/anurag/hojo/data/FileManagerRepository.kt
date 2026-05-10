@@ -22,32 +22,81 @@ import okhttp3.WebSocket
 import okhttp3.WebSocketListener
 import okio.ByteString
 import okio.ByteString.Companion.toByteString
+import wtf.anurag.hojo.connectivity.EpaperConnectivityManager
 import wtf.anurag.hojo.data.model.FileItem
 import wtf.anurag.hojo.data.model.StorageStatus
 import javax.inject.Inject
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
-class FileManagerRepository @Inject constructor(private val client: OkHttpClient) {
+class FileManagerRepository
+@Inject
+constructor(
+        private val client: OkHttpClient,
+        private val connectivityManager: EpaperConnectivityManager
+) {
     private val gson = Gson()
     private val TAG = "FileManagerRepo"
+    private val fileListType = object : TypeToken<List<FileItem>>() {}.type
+
+    companion object {
+        private const val FILE_LIST_PAGE_SIZE = 100
+        private const val MAX_FILE_LIST_PAGES = 100
+    }
+
+    private suspend fun deviceClientOrFallback(): OkHttpClient {
+        val network = connectivityManager.getDeviceNetworkOrNull()
+        return if (network != null) {
+            connectivityManager.createNetworkBoundClient(network)
+        } else {
+            Log.d(TAG, "No device network available, falling back to shared OkHttpClient")
+            client
+        }
+    }
 
     suspend fun fetchList(baseUrl: String, path: String): List<FileItem> =
             withContext(Dispatchers.IO) {
                 val encodedPath = URLEncoder.encode(path, "UTF-8")
-                val url = "$baseUrl/api/files?path=$encodedPath"
-                Log.d(TAG, "fetchList -> GET $url")
+                val allItems = mutableListOf<FileItem>()
+                var firstPageSignature: List<String>? = null
+                val httpClient = deviceClientOrFallback()
+                var page = 0
 
-                val request = Request.Builder().url(url).build()
+                while (page < MAX_FILE_LIST_PAGES) {
+                    val offset = page * FILE_LIST_PAGE_SIZE
+                    val url =
+                            "$baseUrl/api/files?path=$encodedPath&offset=$offset&limit=$FILE_LIST_PAGE_SIZE"
+                    Log.d(TAG, "fetchList -> GET $url")
 
-                client.newCall(request).execute().use { response ->
-                    Log.d(TAG, "fetchList -> response code: ${response.code}")
-                    if (!response.isSuccessful) throw IOException("List failed: ${response.code}")
-                    val json = response.body?.string() ?: "[]"
-                    val type = object : TypeToken<List<FileItem>>() {}.type
-                    val list: List<FileItem> = gson.fromJson(json, type)
-                    list.sortedWith(compareBy({ !it.isDirectory }, { it.name }))
+                    val request = Request.Builder().url(url).build()
+                    val pageItems =
+                            httpClient.newCall(request).execute().use { response ->
+                                Log.d(TAG, "fetchList -> response code: ${response.code}")
+                                if (!response.isSuccessful) {
+                                    throw IOException("List failed: ${response.code}")
+                                }
+                                val json = response.body?.string() ?: "[]"
+                                gson.fromJson<List<FileItem>>(json, fileListType)
+                            }
+
+                    val pageSignature = pageItems.map { "${it.name}:${it.isDirectory}:${it.size}" }
+                    if (page == 0) {
+                        firstPageSignature = pageSignature
+                    } else if (pageSignature == firstPageSignature) {
+                        Log.d(TAG, "fetchList -> endpoint ignored pagination, stopping after first page")
+                        break
+                    }
+
+                    allItems += pageItems
+
+                    if (pageItems.size < FILE_LIST_PAGE_SIZE || pageItems.isEmpty()) {
+                        break
+                    }
+
+                    page++
                 }
+
+                allItems.sortedWith(compareBy({ !it.isDirectory }, { it.name }))
             }
 
     suspend fun fetchStatus(baseUrl: String): StorageStatus =
@@ -57,7 +106,7 @@ class FileManagerRepository @Inject constructor(private val client: OkHttpClient
 
                 val request = Request.Builder().url(url).build()
 
-                client.newCall(request).execute().use { response ->
+                deviceClientOrFallback().newCall(request).execute().use { response ->
                     Log.d(TAG, "fetchStatus -> response code: ${response.code}")
                     if (!response.isSuccessful) throw IOException("Status failed: ${response.code}")
                     val json = response.body?.string()
@@ -80,7 +129,7 @@ class FileManagerRepository @Inject constructor(private val client: OkHttpClient
                 val request = Request.Builder().url("$baseUrl/mkdir").post(body).build()
 
                 Log.d(TAG, "createFolder -> POST $baseUrl/mkdir with path=$parentPath name=$folderName")
-                client.newCall(request).execute().use { response ->
+                deviceClientOrFallback().newCall(request).execute().use { response ->
                     Log.d(TAG, "createFolder -> response code: ${response.code}")
                     if (!response.isSuccessful) throw IOException("Create failed: ${response.code}")
                 }
@@ -94,7 +143,7 @@ class FileManagerRepository @Inject constructor(private val client: OkHttpClient
 
                 val request = Request.Builder().url("$baseUrl/delete").post(body).build()
 
-                client.newCall(request).execute().use { response ->
+                deviceClientOrFallback().newCall(request).execute().use { response ->
                     if (!response.isSuccessful) throw IOException("Delete failed: ${response.code}")
                 }
             }
@@ -112,8 +161,23 @@ class FileManagerRepository @Inject constructor(private val client: OkHttpClient
 
                 val request = Request.Builder().url("$baseUrl/rename").post(body).build()
 
-                client.newCall(request).execute().use { response ->
+                deviceClientOrFallback().newCall(request).execute().use { response ->
                     if (!response.isSuccessful) throw IOException("Rename failed: ${response.code}")
+                }
+            }
+
+    suspend fun moveItem(baseUrl: String, from: String, destinationFolder: String) =
+            withContext(Dispatchers.IO) {
+                val body =
+                        FormBody.Builder()
+                                .add("path", from)
+                                .add("dest", destinationFolder.ifBlank { "/" })
+                                .build()
+
+                val request = Request.Builder().url("$baseUrl/move").post(body).build()
+
+                deviceClientOrFallback().newCall(request).execute().use { response ->
+                    if (!response.isSuccessful) throw IOException("Move failed: ${response.code}")
                 }
             }
 
@@ -125,7 +189,7 @@ class FileManagerRepository @Inject constructor(private val client: OkHttpClient
 
                 val request = Request.Builder().url(url).build()
 
-                client.newCall(request).execute().use { response ->
+                deviceClientOrFallback().newCall(request).execute().use { response ->
                     Log.d(TAG, "downloadFile -> response code: ${response.code}")
                     if (!response.isSuccessful) throw IOException("Download failed: ${response.code}")
                     response.body?.byteStream()?.use { input ->
@@ -171,7 +235,7 @@ class FileManagerRepository @Inject constructor(private val client: OkHttpClient
                                 .post(body)
                                 .build()
 
-                client.newCall(request).execute().use { response ->
+                deviceClientOrFallback().newCall(request).execute().use { response ->
                     if (!response.isSuccessful) throw IOException("Upload failed: ${response.code}")
                 }
             }
@@ -184,9 +248,10 @@ class FileManagerRepository @Inject constructor(private val client: OkHttpClient
      * Protocol:
      *   1. Connect to ws://host:81
      *   2. Send TEXT "START:<filename>:<size>:<dir>"
-     *   3. Send BINARY chunks of the file data
-     *   4. Receive TEXT "PROGRESS:n:total" updates (optional)
-     *   5. Receive TEXT "DONE" on success, "ERROR:<msg>" on failure
+     *   3. Wait for TEXT "READY"
+     *   4. Send BINARY chunks of the file data
+     *   5. Receive TEXT "PROGRESS:n:total" updates (optional)
+     *   6. Receive TEXT "DONE" on success, "ERROR:<msg>" on failure
      *
      * @param targetPath Full path on device, e.g. "/books/myfile.xtc"
      */
@@ -202,14 +267,14 @@ class FileManagerRepository @Inject constructor(private val client: OkHttpClient
                 val filename = targetPath.substringAfterLast('/')
                 val dir = targetPath.substringBeforeLast('/').ifEmpty { "/" }
                 val fileSize = file.length()
+                val wsClient = deviceClientOrFallback()
 
                 suspendCancellableCoroutine<Unit> { cont ->
                     val request = Request.Builder().url(wsUrl).build()
+                    var uploadStarted = false
 
                     val listener = object : WebSocketListener() {
-                        override fun onOpen(ws: WebSocket, response: Response) {
-                            // Send START command then immediately stream the file
-                            ws.send("START:$filename:$fileSize:$dir")
+                        private fun streamFile(ws: WebSocket) {
                             try {
                                 val buffer = ByteArray(8192)
                                 file.inputStream().use { stream ->
@@ -226,8 +291,18 @@ class FileManagerRepository @Inject constructor(private val client: OkHttpClient
                             }
                         }
 
+                        override fun onOpen(ws: WebSocket, response: Response) {
+                            ws.send("START:$filename:$fileSize:$dir")
+                        }
+
                         override fun onMessage(ws: WebSocket, text: String) {
                             when {
+                                text == "READY" -> {
+                                    if (!uploadStarted) {
+                                        uploadStarted = true
+                                        streamFile(ws)
+                                    }
+                                }
                                 text == "DONE" -> {
                                     ws.close(1000, null)
                                     if (cont.isActive) cont.resume(Unit)
@@ -257,7 +332,7 @@ class FileManagerRepository @Inject constructor(private val client: OkHttpClient
                         }
                     }
 
-                    val ws = client.newWebSocket(request, listener)
+                    val ws = wsClient.newWebSocket(request, listener)
                     cont.invokeOnCancellation { ws.cancel() }
                 }
             }

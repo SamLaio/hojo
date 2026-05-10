@@ -24,6 +24,9 @@ class ConnectivityViewModel @Inject constructor(
     val storageStatus: StateFlow<StorageStatus?> = connectivityRepository.storageStatus
     val deviceBaseUrl: StateFlow<String> = connectivityRepository.deviceBaseUrl
     val isDiscovering: StateFlow<Boolean> = connectivityRepository.isDiscovering
+    val manualEndpointRequested: StateFlow<Boolean> =
+        connectivityRepository.manualEndpointRequested
+    val manualEndpointError: StateFlow<String?> = connectivityRepository.manualEndpointError
 
     init {
         checkConnection()
@@ -42,6 +45,16 @@ class ConnectivityViewModel @Inject constructor(
         viewModelScope.launch {
             connectivityRepository.handleConnect(silent)
         }
+    }
+
+    fun submitManualEndpoint(url: String) {
+        viewModelScope.launch {
+            connectivityRepository.submitManualEndpoint(url)
+        }
+    }
+
+    fun dismissManualEndpointPrompt() {
+        connectivityRepository.dismissManualEndpointPrompt()
     }
 
     @RequiresApi(Build.VERSION_CODES.Q)

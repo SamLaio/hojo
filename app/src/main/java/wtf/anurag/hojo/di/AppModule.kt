@@ -28,9 +28,10 @@ object AppModule {
     @Provides
     @Singleton
     fun provideConnectivityRepository(
+        @ApplicationContext context: Context,
         connectivityManager: EpaperConnectivityManager,
         fileManagerRepository: FileManagerRepository
     ): ConnectivityRepository {
-        return DefaultConnectivityRepository(connectivityManager, fileManagerRepository)
+        return DefaultConnectivityRepository(context, connectivityManager, fileManagerRepository)
     }
 }

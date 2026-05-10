@@ -56,27 +56,6 @@ import wtf.anurag.hojo.ui.viewmodels.TasksViewModel
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TasksApp(onBack: () -> Unit, viewModel: TasksViewModel = hiltViewModel()) {
-    val context = androidx.compose.ui.platform.LocalContext.current
-    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-        val permissionLauncher =
-                androidx.activity.compose.rememberLauncherForActivityResult(
-                        contract =
-                                androidx.activity.result.contract.ActivityResultContracts
-                                        .RequestPermission()
-                ) {}
-
-        androidx.compose.runtime.LaunchedEffect(Unit) {
-            if (
-                    androidx.core.content.ContextCompat.checkSelfPermission(
-                            context,
-                            android.Manifest.permission.POST_NOTIFICATIONS
-                    ) != android.content.pm.PackageManager.PERMISSION_GRANTED
-            ) {
-                permissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
-            }
-        }
-    }
-
     var selectedTabIndex by remember { mutableIntStateOf(0) }
     val tabs = listOf("Ongoing", "History")
 

@@ -2,11 +2,11 @@ package wtf.anurag.hojo.data
 
 import android.content.Context
 import android.net.Uri
+import android.provider.OpenableColumns
 import android.util.Log
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
 import java.io.FileOutputStream
-import java.io.InputStream
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -112,6 +112,28 @@ constructor(
         }
     }
 
+    private fun queryContentLength(uri: Uri): Long? {
+        if (uri.scheme == "file") {
+            return uri.path?.let { File(it).length() }?.takeIf { it > 0L }
+        }
+
+        return context.contentResolver.query(
+                uri,
+                arrayOf(OpenableColumns.SIZE),
+                null,
+                null,
+                null
+        )?.use { cursor ->
+            if (!cursor.moveToFirst()) return@use null
+            val sizeIndex = cursor.getColumnIndex(OpenableColumns.SIZE)
+            if (sizeIndex == -1 || cursor.isNull(sizeIndex)) {
+                null
+            } else {
+                cursor.getLong(sizeIndex).takeIf { it > 0L }
+            }
+        }
+    }
+
     private fun processQueue() {
         if (currentUploadJob?.isActive == true) return
 
@@ -153,17 +175,16 @@ constructor(
                         val baseUrl = connectivityRepository.deviceBaseUrl.value
 
                         // 2. Prepare File
-                        val inputStream: InputStream? =
-                                context.contentResolver.openInputStream(task.uri)
-                        if (inputStream == null) {
-                            throw Exception("Could not open file stream")
-                        }
-
                         tempFile =
                                 File(context.cacheDir, "upload_${System.currentTimeMillis()}.tmp")
-                        val totalBytes = inputStream.available().toLong() // Estimate
 
-                        FileOutputStream(tempFile).use { output -> inputStream.copyTo(output) }
+                        val expectedBytes = queryContentLength(task.uri)
+                        context.contentResolver.openInputStream(task.uri)?.use { inputStream ->
+                            FileOutputStream(tempFile).use { output -> inputStream.copyTo(output) }
+                        } ?: throw Exception("Could not open file stream")
+
+                        val totalBytes = expectedBytes ?: tempFile.length()
+                        updateTask(task.id) { it.copy(totalBytes = totalBytes) }
 
                         // 3. Upload
                         var startTime = System.currentTimeMillis()

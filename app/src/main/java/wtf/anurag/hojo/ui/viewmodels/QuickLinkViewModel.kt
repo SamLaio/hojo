@@ -94,18 +94,16 @@ class QuickLinkViewModel @Inject constructor(
 
     private suspend fun ensureReadabilityJsExists(): String {
         return withContext(Dispatchers.IO) {
-            val file = getReadabilityJsFile()
-
-            // Check if file exists and has content
-            if (!file.exists() || file.length() == 0L) {
-                // Download from Mozilla's GitHub
-                val url = "https://raw.githubusercontent.com/mozilla/readability/main/Readability.js"
-                val content = URL(url).readText()
-                FileOutputStream(file).use { it.write(content.toByteArray()) }
+            val cachedFile = getReadabilityJsFile()
+            if (cachedFile.exists() && cachedFile.length() > 0L) {
+                return@withContext cachedFile.readText()
             }
 
-            // Read and return the content
-            file.readText()
+            getApplication<Application>()
+                .assets
+                .open("readability-lite.js")
+                .bufferedReader()
+                .use { it.readText() }
         }
     }
 
