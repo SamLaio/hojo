@@ -17,7 +17,7 @@ android {
     compileSdk = 35 // Use a fixed, stable number or a version variable if defined
 
     defaultConfig {
-        applicationId = "wtf.anurag.hojo"
+        applicationId = "wtf.anurag.hojo.crosspoint"
         minSdk = 30
         targetSdk = 35
         versionCode = 1
