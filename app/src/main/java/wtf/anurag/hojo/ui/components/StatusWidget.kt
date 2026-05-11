@@ -57,6 +57,7 @@ fun StatusWidget(
     isConnecting: Boolean,
     storageStatus: StorageStatus?,
     onConnect: (Boolean) -> Unit,
+    onDisconnect: () -> Unit,
     text: StatusWidgetText = StatusWidgetText()
 ) {
     val appText = LocalAppStrings.current
@@ -184,6 +185,21 @@ fun StatusWidget(
                         Text(
                             text = if (isConnecting) "..." else resolvedText.connect,
                             color = MaterialTheme.colorScheme.onPrimary,
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .clip(MaterialTheme.shapes.small)
+                            .background(MaterialTheme.colorScheme.error)
+                            .clickable(enabled = !isConnecting) { onDisconnect() }
+                            .padding(horizontal = 12.dp, vertical = 6.dp)
+                    ) {
+                        Text(
+                            text = resolvedText.offline,
+                            color = MaterialTheme.colorScheme.onError,
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.SemiBold
                         )

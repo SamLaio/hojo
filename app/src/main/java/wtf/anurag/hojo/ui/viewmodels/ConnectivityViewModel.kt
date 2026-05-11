@@ -7,7 +7,9 @@ import androidx.annotation.RequiresApi
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import wtf.anurag.hojo.data.ConnectivityRepository
 import wtf.anurag.hojo.data.model.StorageStatus
@@ -27,6 +29,8 @@ class ConnectivityViewModel @Inject constructor(
     val manualEndpointRequested: StateFlow<Boolean> =
         connectivityRepository.manualEndpointRequested
     val manualEndpointError: StateFlow<String?> = connectivityRepository.manualEndpointError
+    private val _isCheckingConnection = MutableStateFlow(false)
+    val isCheckingConnection: StateFlow<Boolean> = _isCheckingConnection.asStateFlow()
 
     init {
         checkConnection()
@@ -34,9 +38,14 @@ class ConnectivityViewModel @Inject constructor(
         handleConnect(silent = true)
     }
 
-    fun checkConnection() {
+    fun checkConnection(showLoading: Boolean = false) {
         viewModelScope.launch {
-            connectivityRepository.checkConnection()
+            if (showLoading) _isCheckingConnection.value = true
+            try {
+                connectivityRepository.checkConnection()
+            } finally {
+                if (showLoading) _isCheckingConnection.value = false
+            }
         }
     }
 
@@ -61,6 +70,12 @@ class ConnectivityViewModel @Inject constructor(
     fun updateDeviceStatus() {
         viewModelScope.launch {
             connectivityRepository.updateDeviceStatus()
+        }
+    }
+
+    fun disconnect() {
+        viewModelScope.launch {
+            connectivityRepository.disconnect()
         }
     }
 }

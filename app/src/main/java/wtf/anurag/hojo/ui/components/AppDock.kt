@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Card
@@ -83,6 +84,12 @@ fun AppDock(
                                 text.converter,
                                 text.converterSub,
                                 Icons.Default.Description
+                        ),
+                        DockAction(
+                                "Font Converter",
+                                text.fontConverter,
+                                text.fontConverterSub,
+                                Icons.Default.TextFields
                         ),
                         DockAction(
                                 "Settings",

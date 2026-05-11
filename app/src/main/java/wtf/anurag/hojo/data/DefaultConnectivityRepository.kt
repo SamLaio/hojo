@@ -56,7 +56,9 @@ class DefaultConnectivityRepository @Inject constructor(
         }
 
     override suspend fun checkConnection() {
-        _isConnected.value = tryPreferredEndpoints()
+        if (!tryPreferredEndpoints()) {
+            resetConnectionState()
+        }
     }
 
     private suspend fun tryPreferredEndpoints(): Boolean {
@@ -75,6 +77,15 @@ class DefaultConnectivityRepository @Inject constructor(
             true
         } catch (e: Exception) {
             false
+        }
+    }
+
+    private fun resetConnectionState(resetBaseUrl: Boolean = false) {
+        _isConnected.value = false
+        _isConnecting.value = false
+        _storageStatus.value = null
+        if (resetBaseUrl) {
+            _deviceBaseUrl.value = DEFAULT_DEVICE_BASE_URL
         }
     }
 
@@ -133,6 +144,7 @@ class DefaultConnectivityRepository @Inject constructor(
                 }
             }
         } catch (e: Exception) {
+            resetConnectionState()
             if (!silent) {
                 // Log error
                 e.printStackTrace()
@@ -153,7 +165,7 @@ class DefaultConnectivityRepository @Inject constructor(
                     preferences.edit().putString(PREF_MANUAL_ENDPOINT, normalizedUrl).apply()
                     _isConnected.value = true
                 } else {
-                    _isConnected.value = false
+                    resetConnectionState()
                     _manualEndpointRequested.value = true
                     _manualEndpointError.value = "Cannot connect to $normalizedUrl"
                 }
@@ -179,15 +191,24 @@ class DefaultConnectivityRepository @Inject constructor(
                 _storageStatus.value = status
             } catch (e: Exception) {
                 e.printStackTrace()
+                resetConnectionState()
             }
         }
     }
 
     override suspend fun disconnect() {
-         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-             connectivityManager.disconnectEpaperHotspot()
+         withContext(Dispatchers.IO) {
+             try {
+                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                     connectivityManager.unbindNetwork()
+                     connectivityManager.disconnectEpaperHotspot()
+                 }
+             } finally {
+                 _manualEndpointRequested.value = false
+                 _manualEndpointError.value = null
+                 resetConnectionState(resetBaseUrl = true)
+             }
          }
-         _isConnected.value = false
     }
 
     override suspend fun unbindNetwork() {

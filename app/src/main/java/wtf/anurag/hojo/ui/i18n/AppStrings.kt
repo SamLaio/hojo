@@ -29,6 +29,8 @@ data class AppStrings(
         val rendererSub: String,
         val converter: String,
         val converterSub: String,
+        val fontConverter: String,
+        val fontConverterSub: String,
         val settings: String,
         val settingsSub: String,
         val device: String,
@@ -135,7 +137,13 @@ data class AppStrings(
         val contrast: String,
         val brightness: String,
         val saturation: String,
-        val converterRequiresAndroid10: String
+        val converterRequiresAndroid10: String,
+        val selectFontFile: String,
+        val fontConverterDescription: String,
+        val fontConverterOutputHint: String,
+        val fontSize: String,
+        val convertingFont: (Int, Int) -> String,
+        val fontConvertSaved: (String, String) -> String
 )
 
 val LocalAppStrings = staticCompositionLocalOf { appStrings(LanguageMode.ZH_TW) }
@@ -172,8 +180,10 @@ private val zhTwStrings =
                 tasksSub = "管理上傳",
                 renderer = "渲染器",
                 rendererSub = "測試 XTC 渲染",
-                converter = "轉換器",
+                converter = "EPUB轉換",
                 converterSub = "將書籍轉成 XTC",
+                fontConverter = "字型轉換",
+                fontConverterSub = "轉成 CrossPoint 字型",
                 settings = "設定",
                 settingsSub = "應用程式偏好設定",
                 device = "裝置",
@@ -280,7 +290,13 @@ private val zhTwStrings =
                 contrast = "對比",
                 brightness = "亮度",
                 saturation = "飽和度",
-                converterRequiresAndroid10 = "轉換器需要 Android 10 (API 29) 或更新版本。"
+                converterRequiresAndroid10 = "轉換器需要 Android 10 (API 29) 或更新版本。",
+                selectFontFile = "選擇字型檔案",
+                fontConverterDescription = "選擇 OTF、TTF 或 TTC 字型後，會輸出為 CrossPoint 可讀取的 .epdfont。",
+                fontConverterOutputHint = "預設輸出名稱：原字型名.epdfont。若原資料夾無法寫入，會自動儲存到 Downloads。",
+                fontSize = "字型大小",
+                convertingFont = { current, total -> if (total > 0) "正在轉換字型：$current / $total" else "正在轉換字型..." },
+                fontConvertSaved = { fileName, location -> "已輸出 $fileName\n位置：$location" }
         )
 
 private val enStrings =
@@ -310,6 +326,8 @@ private val enStrings =
                 rendererSub = "Test XTC Rendering",
                 converter = "EPUB Converter",
                 converterSub = "Convert books to XTC",
+                fontConverter = "Font Converter",
+                fontConverterSub = "Convert to CrossPoint font",
                 settings = "Settings",
                 settingsSub = "App preferences",
                 device = "Device",
@@ -416,5 +434,11 @@ private val enStrings =
                 contrast = "Contrast",
                 brightness = "Brightness",
                 saturation = "Saturation",
-                converterRequiresAndroid10 = "Converter requires Android 10 (API 29) or newer."
+                converterRequiresAndroid10 = "Converter requires Android 10 (API 29) or newer.",
+                selectFontFile = "Select Font File",
+                fontConverterDescription = "Select an OTF, TTF, or TTC font and convert it into a CrossPoint .epdfont file.",
+                fontConverterOutputHint = "Default output name: original-font-name.epdfont. If the source folder cannot be written, the file is saved to Downloads.",
+                fontSize = "Font Size",
+                convertingFont = { current, total -> if (total > 0) "Converting font: $current / $total" else "Converting font..." },
+                fontConvertSaved = { fileName, location -> "Exported $fileName\nLocation: $location" }
         )

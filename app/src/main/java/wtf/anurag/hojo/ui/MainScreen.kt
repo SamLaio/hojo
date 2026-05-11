@@ -5,6 +5,9 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -16,6 +19,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -29,6 +33,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.compose.NavHost
@@ -40,6 +47,7 @@ import wtf.anurag.hojo.data.model.StorageStatus
 import wtf.anurag.hojo.ui.apps.converter.ConverterApp
 import wtf.anurag.hojo.ui.apps.converter.XtcPreviewIntermediate
 import wtf.anurag.hojo.ui.apps.filemanager.FileManagerApp
+import wtf.anurag.hojo.ui.apps.fontconverter.FontConverterApp
 import wtf.anurag.hojo.ui.apps.quicklink.QuickLinkModal
 import wtf.anurag.hojo.ui.apps.devicesettings.DeviceSettingsApp
 import wtf.anurag.hojo.ui.apps.settings.SettingsApp
@@ -226,7 +234,14 @@ fun MainScreen() {
                                                 isSaved = false
                                         )
                                 } else {
-                                        Column(
+                                        val homeScrollState = rememberScrollState()
+                                        val isCheckingConnection by
+                                                connectivityViewModel.isCheckingConnection
+                                                        .collectAsState()
+                                        var pullDistance by remember { mutableStateOf(0f) }
+                                        var pullCheckTriggered by remember { mutableStateOf(false) }
+
+                                        Box(
                                                 modifier =
                                                         Modifier.fillMaxSize()
                                                                 .background(
@@ -236,33 +251,118 @@ fun MainScreen() {
                                                                                 .background
                                                                 )
                                                                 .statusBarsPadding()
-                                                                .verticalScroll(rememberScrollState())
-                                                                .padding(16.dp)
-                                        ) {
-                                                StatusWidget(
-                                                        isConnected = isConnected,
-                                                        isConnecting = isConnecting,
-                                                        storageStatus = storageStatus,
-                                                        onConnect = {
-                                                                if (Build.VERSION.SDK_INT >=
-                                                                                Build.VERSION_CODES
-                                                                                        .Q
+                                                                .pointerInput(
+                                                                        isConnecting,
+                                                                        isCheckingConnection
                                                                 ) {
-                                                                        connectivityViewModel
-                                                                                .handleConnect()
+                                                                        awaitEachGesture {
+                                                                                pullDistance = 0f
+                                                                                pullCheckTriggered =
+                                                                                        false
+                                                                                awaitFirstDown(
+                                                                                        requireUnconsumed =
+                                                                                                false,
+                                                                                        pass =
+                                                                                                PointerEventPass
+                                                                                                        .Initial
+                                                                                )
+
+                                                                                while (true) {
+                                                                                        val event =
+                                                                                                awaitPointerEvent(
+                                                                                                        PointerEventPass
+                                                                                                                .Initial
+                                                                                                )
+                                                                                        val change =
+                                                                                                event.changes
+                                                                                                        .firstOrNull()
+                                                                                                        ?: continue
+                                                                                        if (!change
+                                                                                                        .pressed
+                                                                                        ) {
+                                                                                                break
+                                                                                        }
+
+                                                                                        val dragAmount =
+                                                                                                change
+                                                                                                        .positionChange()
+                                                                                                        .y
+                                                                                        if (homeScrollState
+                                                                                                        .value == 0 &&
+                                                                                                        dragAmount > 0 &&
+                                                                                                        !isConnecting &&
+                                                                                                        !isCheckingConnection
+                                                                                        ) {
+                                                                                                pullDistance +=
+                                                                                                        dragAmount
+                                                                                                if (pullDistance >=
+                                                                                                                120f &&
+                                                                                                                !pullCheckTriggered
+                                                                                                ) {
+                                                                                                        pullCheckTriggered =
+                                                                                                                true
+                                                                                                        connectivityViewModel
+                                                                                                                .checkConnection(
+                                                                                                                        showLoading =
+                                                                                                                                true
+                                                                                                                )
+                                                                                                }
+                                                                                        } else if (dragAmount < 0) {
+                                                                                                pullDistance =
+                                                                                                        0f
+                                                                                                pullCheckTriggered =
+                                                                                                        false
+                                                                                        }
+                                                                                }
+
+                                                                                pullDistance = 0f
+                                                                                pullCheckTriggered =
+                                                                                        false
+                                                                        }
                                                                 }
-                                                        }
-                                                )
+                                        ) {
+                                                Column(
+                                                        modifier =
+                                                                Modifier.fillMaxSize()
+                                                                        .verticalScroll(
+                                                                                homeScrollState
+                                                                        )
+                                                                        .padding(16.dp)
+                                                ) {
+                                                        StatusWidget(
+                                                                isConnected = isConnected,
+                                                                isConnecting = isConnecting,
+                                                                storageStatus = storageStatus,
+                                                                onConnect = {
+                                                                        if (Build.VERSION.SDK_INT >=
+                                                                                        Build.VERSION_CODES
+                                                                                                .Q
+                                                                        ) {
+                                                                                connectivityViewModel
+                                                                                        .handleConnect()
+                                                                        }
+                                                                },
+                                                                onDisconnect = {
+                                                                        if (Build.VERSION.SDK_INT >=
+                                                                                        Build.VERSION_CODES
+                                                                                                .Q
+                                                                        ) {
+                                                                                connectivityViewModel
+                                                                                        .disconnect()
+                                                                        }
+                                                                }
+                                                        )
 
-                                                Spacer(modifier = Modifier.height(24.dp))
+                                                        Spacer(modifier = Modifier.height(24.dp))
 
-                                                AppDock(
-                                                        isGridLayout = isGridLayout,
-                                                        onToggleLayout = {
-                                                                mainViewModel.toggleLayout()
-                                                        },
-                                                        onAction = { actionId ->
-                                                                when (actionId) {
+                                                        AppDock(
+                                                                isGridLayout = isGridLayout,
+                                                                onToggleLayout = {
+                                                                        mainViewModel
+                                                                                .toggleLayout()
+                                                                },
+                                                                onAction = { actionId ->
+                                                                        when (actionId) {
                                                                         "File Manager" ->
                                                                                 navController
                                                                                         .navigate(
@@ -293,6 +393,11 @@ fun MainScreen() {
                                                                                         .navigate(
                                                                                                 "converter"
                                                                                         )
+                                                                        "Font Converter" ->
+                                                                                navController
+                                                                                        .navigate(
+                                                                                                "font_converter"
+                                                                                        )
                                                                         "Settings" ->
                                                                                 navController
                                                                                         .navigate(
@@ -306,6 +411,18 @@ fun MainScreen() {
                                                                 }
                                                         }
                                                 )
+                                        }
+
+                                                if (isCheckingConnection) {
+                                                        Box(
+                                                                modifier =
+                                                                        Modifier.fillMaxSize(),
+                                                                contentAlignment =
+                                                                        Alignment.Center
+                                                        ) {
+                                                                CircularProgressIndicator()
+                                                        }
+                                                }
                                         }
 
                                         QuickLinkModal(
@@ -506,6 +623,51 @@ fun MainScreen() {
                                                 Text(
                                                         text.converterRequiresAndroid10
                                                 )
+                                                Spacer(modifier = Modifier.height(12.dp))
+                                                Button(onClick = { navController.popBackStack() }) {
+                                                        Text(text.back)
+                                                }
+                                        }
+                                }
+                        }
+
+                        composable(
+                                "font_converter",
+                                enterTransition = {
+                                        slideInHorizontally(
+                                                animationSpec = tween(300),
+                                                initialOffsetX = { it }
+                                        )
+                                },
+                                exitTransition = {
+                                        slideOutHorizontally(
+                                                animationSpec = tween(300),
+                                                targetOffsetX = { it }
+                                        )
+                                },
+                                popEnterTransition = {
+                                        slideInHorizontally(
+                                                animationSpec = tween(300),
+                                                initialOffsetX = { -it }
+                                        )
+                                },
+                                popExitTransition = {
+                                        slideOutHorizontally(
+                                                animationSpec = tween(300),
+                                                targetOffsetX = { it }
+                                        )
+                                }
+                        ) {
+                                val text = LocalAppStrings.current
+
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                                        FontConverterApp(onBack = { navController.popBackStack() })
+                                } else {
+                                        Column(
+                                                modifier = Modifier.fillMaxSize().padding(16.dp),
+                                                horizontalAlignment = Alignment.CenterHorizontally
+                                        ) {
+                                                Text(text.converterRequiresAndroid10)
                                                 Spacer(modifier = Modifier.height(12.dp))
                                                 Button(onClick = { navController.popBackStack() }) {
                                                         Text(text.back)
