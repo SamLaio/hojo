@@ -205,7 +205,7 @@ fun SettingsApp(onBack: () -> Unit, viewModel: SettingsViewModel = hiltViewModel
                             val intent =
                                     Intent(
                                             Intent.ACTION_VIEW,
-                                            Uri.parse("https://github.com/meta-boy/hojo")
+                                            Uri.parse("https://github.com/SamLaio/hojo")
                                     )
                             context.startActivity(intent)
                         }

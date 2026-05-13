@@ -2,7 +2,7 @@
 
 Hojo-Crosspoint 是一個針對 CrossPoint 中文閱讀器調整的 Android companion app，用來連線裝置、管理檔案、轉換 EPUB、轉換字型，以及把內容上傳到閱讀器。
 
-目前版本：`cpChTyZh.V1.2`
+目前版本：`cpChTyZh.V1.3`
 
 > 這是以 Hojo 為基礎改作的社群版本，並非 CrossPoint 或原 Hojo 專案的官方發行版。請自行評估風險後使用。
 
@@ -15,6 +15,7 @@ Hojo-Crosspoint 是一個針對 CrossPoint 中文閱讀器調整的 Android comp
 - 手動輸入的網址會被記住，下次預設網址連不上時會自動嘗試
 - 支援 device-bound network client，避免手機同時有網際網路與裝置區網時 API 走錯網路
 - Android 11 以上可安裝使用
+- GitHub 原始碼：`https://github.com/SamLaio/hojo`
 
 ## 主要功能
 
@@ -92,6 +93,7 @@ Hojo-Crosspoint 是一個針對 CrossPoint 中文閱讀器調整的 Android comp
 - 語言：正體中文、英文
 - 預設語言為正體中文
 - App 名稱：`Hojo-Crosspoint`
+- GitHub 原始碼連結：`https://github.com/SamLaio/hojo`
 
 ## 連線行為
 
@@ -130,8 +132,8 @@ applicationId = "wtf.anurag.hojo.crosspoint"
 minSdk = 30
 targetSdk = 35
 compileSdk = 35
-versionCode = 3
-versionName = "cpChTyZh.V1.2"
+versionCode = 4
+versionName = "cpChTyZh.V1.3"
 ```
 
 `minSdk = 30` 代表 Android 11 以上可安裝。
@@ -253,8 +255,11 @@ app/src/main/java/wtf/anurag/hojo/
 
 ## 版本摘要
 
-`cpChTyZh.V1.2` 包含：
+`cpChTyZh.V1.3` 包含：
 
+- 版本號更新為 `cpChTyZh.V1.3`
+- `versionCode` 更新為 `4`
+- 設定頁 GitHub 原始碼連結改為 `https://github.com/SamLaio/hojo`
 - App 名稱改為 Hojo-Crosspoint
 - 預設 CrossPoint host 改為 `http://crosspoint.local/`
 - 支援手動輸入與記錄 CrossPoint LAN 網址
