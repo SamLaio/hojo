@@ -31,6 +31,11 @@ private val WORD_SPACING_OPTIONS = listOf(50, 75, 100, 125, 150, 200)
 
 private data class DropdownOption<T>(val value: T, val label: String)
 
+private fun conversionPercent(progress: Int, total: Int): Int {
+    if (total <= 0) return progress.coerceIn(0, 100)
+    return ((progress.coerceAtLeast(0).toFloat() / total) * 100).toInt().coerceIn(0, 100)
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @RequiresApi(Build.VERSION_CODES.Q)
 @Suppress("DEPRECATION")
@@ -41,7 +46,10 @@ fun ConverterApp(onBack: () -> Unit, connectivityViewModel: ConnectivityViewMode
     val status by viewModel.status.collectAsState()
     val settings by viewModel.settings.collectAsState()
     val selectedFile by viewModel.selectedFile.collectAsState()
+    val selectedFileName by viewModel.selectedFileName.collectAsState()
+    val uploadState by viewModel.uploadState.collectAsState()
     val deviceBaseUrl by connectivityViewModel.deviceBaseUrl.collectAsState()
+    val isConnected by connectivityViewModel.isConnected.collectAsState()
     val text = LocalAppStrings.current
 
     if (status is ConverterStatus.Preview) {
@@ -52,16 +60,28 @@ fun ConverterApp(onBack: () -> Unit, connectivityViewModel: ConnectivityViewMode
                 viewModel.reset()
                 onBack()
             },
-            onUpload = { viewModel.uploadToEpaper(previewStatus.outputFile, deviceBaseUrl) },
+            onUpload = {
+                viewModel.uploadToEpaper(
+                    previewStatus.outputFile,
+                    deviceBaseUrl,
+                    text.uploadQueuedInTasks,
+                    text.deviceNotConnected,
+                    text.uploadSuccessful,
+                    text.failed,
+                    isConnected
+                )
+            },
             onSaveToDownloads = { viewModel.saveToDownloads(previewStatus.outputFile) },
-            isSaved = previewStatus.isSaved
+            isSaved = previewStatus.isSaved,
+            uploadEnabled = isConnected,
+            uploadState = uploadState
         )
         return
     }
 
     val filePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument(),
-        onResult = { uri -> uri?.let { viewModel.selectFile(it) } }
+        onResult = { uri -> uri?.let { viewModel.selectFile(it, text.invalidEpubFile) } }
     )
     val fontPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument(),
@@ -96,12 +116,12 @@ fun ConverterApp(onBack: () -> Unit, connectivityViewModel: ConnectivityViewMode
                 if (selectedFile == null) {
                     Spacer(modifier = Modifier.height(32.dp))
                     Button(
-                        onClick = { filePickerLauncher.launch(arrayOf("application/epub+zip")) },
+                        onClick = { filePickerLauncher.launch(arrayOf("*/*")) },
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                     ) { Text(text.selectEpubFile) }
                 } else {
                     Text(
-                        text = "${text.selected}: ${selectedFile?.path?.split("/")?.last()}",
+                        text = "${text.selected}: ${selectedFileName.orEmpty()}",
                         color = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.padding(vertical = 12.dp)
                     )
@@ -134,12 +154,14 @@ fun ConverterApp(onBack: () -> Unit, connectivityViewModel: ConnectivityViewMode
                     is ConverterStatus.ReadingFile ->
                         Text(text.readingFile, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     is ConverterStatus.Converting -> {
+                        val percent = conversionPercent(s.progress, s.total)
                         LinearProgressIndicator(
+                            progress = { percent / 100f },
                             modifier = Modifier.fillMaxWidth(),
                             color = MaterialTheme.colorScheme.primary
                         )
                         Text(
-                            text.convertingPage(s.progress, s.total),
+                            text.convertingPage(percent, 100),
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(top = 8.dp)
                         )
@@ -177,21 +199,6 @@ fun SettingsSection(
 
         // ── Device ──────────────────────────────────────────────────────────────
         SectionHeader(text.converterDeviceSection)
-
-        SettingsRow(text.converterDeviceType) {
-            SegmentedButtonRow {
-                SegmentedButton(
-                    selected = settings.deviceType == "x4",
-                    onClick = { onUpdate(settings.copy(deviceType = "x4")) },
-                    label = "X4 (480×800)"
-                )
-                SegmentedButton(
-                    selected = settings.deviceType == "x3",
-                    onClick = { onUpdate(settings.copy(deviceType = "x3")) },
-                    label = "X3 (528×792)"
-                )
-            }
-        }
 
         SettingsRow(text.converterOrientation) {
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -522,33 +529,6 @@ private fun CheckboxSetting(label: String, checked: Boolean, onCheckedChange: (B
             colors = CheckboxDefaults.colors(checkedColor = MaterialTheme.colorScheme.primary)
         )
         Text(label, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
-    }
-}
-
-@Composable
-private fun SegmentedButtonRow(content: @Composable RowScope.() -> Unit) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-        content = content
-    )
-}
-
-@Composable
-private fun RowScope.SegmentedButton(selected: Boolean, onClick: () -> Unit, label: String) {
-    if (selected) {
-        Button(
-            onClick = onClick,
-            modifier = Modifier.weight(1f).height(36.dp),
-            contentPadding = PaddingValues(horizontal = 8.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-        ) { Text(label, style = MaterialTheme.typography.labelMedium) }
-    } else {
-        OutlinedButton(
-            onClick = onClick,
-            modifier = Modifier.weight(1f).height(36.dp),
-            contentPadding = PaddingValues(horizontal = 8.dp)
-        ) { Text(label, style = MaterialTheme.typography.labelMedium) }
     }
 }
 

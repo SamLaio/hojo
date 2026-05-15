@@ -2,7 +2,7 @@
 
 Hojo-Crosspoint 是一個針對 CrossPoint 中文閱讀器調整的 Android companion app，用來連線裝置、管理檔案、轉換 EPUB、轉換字型，以及把內容上傳到閱讀器。
 
-目前版本：`cpChTyZh.V1.3`
+目前版本：`cpChTyZh.V1.4`
 
 > 這是以 Hojo 為基礎改作的社群版本，並非 CrossPoint 或原 Hojo 專案的官方發行版。請自行評估風險後使用。
 
@@ -24,6 +24,7 @@ Hojo-Crosspoint 是一個針對 CrossPoint 中文閱讀器調整的 Android comp
 - 首頁顯示目前連線狀態
 - 連線成功後，原本的連線按鈕會切換成「離線」
 - 按下「離線」會中斷目前裝置連線，並把畫面狀態重置為未連線
+- 底部連線狀態列會顯示「已連線 / 未連線」，右側提供「重新連線」
 - 首頁向下拉動可重新檢查連線狀態
 - 下拉檢查觸發時，畫面中央會顯示 loading 圖示
 - 連線失敗時會清除錯誤的已連線狀態，避免裝置斷線但 UI 仍顯示已連線
@@ -40,16 +41,21 @@ Hojo-Crosspoint 是一個針對 CrossPoint 中文閱讀器調整的 Android comp
 - File Manager 相關 HTTP API 會優先使用 device-bound client
 - WebSocket 上傳也會優先使用 device-bound client
 - 若找不到裝置網路，會 fallback 到原本的 OkHttpClient
+- WebSocket 上傳會分片並等待送出佇列消化，避免大檔案直接塞滿送出佇列
+- 上傳任務會顯示進行中、完成、失敗與重試狀態，常見的未連線錯誤會顯示本地化訊息
 
 ### EPUB 轉換
 
 - 首頁功能名稱為「EPUB轉換」
 - 選擇 EPUB 檔案後轉換為 CrossPoint 2-bit 灰階書本格式 `.xtch`
-- 仍可切換 1-bit 黑白模式輸出 `.xtc`
+- 可切換 1-bit 黑白模式輸出 `.xtc`
+- 轉換固定使用 CrossPoint X4 尺寸 `480x800`，方向可選 `0° / 90° / 180° / 270°`
+- EPUB 檔案選擇器會允許從 Downloads 等位置選取被系統標錯 MIME 的 `.epub`，並以檔名驗證副檔名
 - 支援預覽轉換結果
 - 可儲存到 Downloads
-- 可上傳到裝置
-- 保留原本轉換流程與任務紀錄
+- 可上傳到裝置根目錄
+- 預覽頁上傳時會先顯示已加入任務，上傳完成或失敗後會在原頁面顯示結果
+- 轉換中的進度顯示為 `0%` 到 `100%`
 
 ### 字型轉換
 
@@ -58,9 +64,11 @@ Hojo-Crosspoint 是一個針對 CrossPoint 中文閱讀器調整的 Android comp
 - 轉換輸出 CrossPoint 可用的 `.epdfont` V1 binary 格式
 - 預設字型大小為 `18`
 - 預設輸出檔名為 `原字型名-字型大小.epdfont`，例如 `MyFont-18.epdfont`
-- 預設會輸出到選擇前字型檔所在位置
-- 如果原資料夾無法寫入，會自動輸出到 Downloads
-- 轉換完成後會在畫面上顯示輸出檔案名稱與位置
+- 轉換完成後會先產生 app 暫存結果，不會自動寫回原資料夾
+- 結果頁提供「儲存」與「上傳」選項
+- 按下「儲存」會輸出到 Downloads
+- 按下「上傳」會把 `.epdfont` 加入上傳任務，目標為裝置根目錄
+- 上傳中會在字型轉換頁顯示進度，完成或失敗後會顯示結果
 - 字型大小可在選檔畫面調整
 - 字型大小旁有 `-` 與 `+` 按鈕
 - 上次輸入的字型大小會被記錄，下次開啟會自動帶入
@@ -73,6 +81,7 @@ Hojo-Crosspoint 是一個針對 CrossPoint 中文閱讀器調整的 Android comp
 
 ### 桌布
 
+- 方向選擇頁左上角提供返回箭頭
 - 選擇圖片
 - 裁切與調整顯示效果
 - 支援直向與橫向
@@ -135,8 +144,8 @@ applicationId = "wtf.anurag.hojo.crosspoint"
 minSdk = 30
 targetSdk = 35
 compileSdk = 35
-versionCode = 4
-versionName = "cpChTyZh.V1.3"
+versionCode = 5
+versionName = "cpChTyZh.V1.4"
 ```
 
 `minSdk = 30` 代表 Android 11 以上可安裝。
@@ -254,14 +263,15 @@ app/src/main/java/wtf/anurag/hojo/
 - 如果檔案列表或設定頁出現 HTML / 字串而不是 JSON，app 會顯示錯誤訊息而不是直接崩潰
 - 手動網址會保存在 app preferences 中
 - 若切換不同 CrossPoint 裝置，必要時可重新輸入新的 LAN 網址
-- 字型轉換的輸出位置取決於 Android 檔案權限；不能寫回原位置時會改存到 Downloads
+- 字型轉換完成後會先保留在 app cache；需要保留檔案時請按「儲存」輸出到 Downloads
+- 書本、字型與快速連結上傳會加入任務佇列；上傳完成或失敗可在原功能頁或任務頁查看
 
 ## 版本摘要
 
-`cpChTyZh.V1.3` 包含：
+`cpChTyZh.V1.4` 包含：
 
-- 版本號更新為 `cpChTyZh.V1.3`
-- `versionCode` 更新為 `4`
+- 版本號更新為 `cpChTyZh.V1.4`
+- `versionCode` 更新為 `5`
 - 設定頁 GitHub 原始碼連結改為 `https://github.com/SamLaio/hojo`
 - App 名稱改為 Hojo-Crosspoint
 - 預設 CrossPoint host 改為 `http://crosspoint.local/`
@@ -271,12 +281,21 @@ app/src/main/java/wtf/anurag/hojo/
 - 首頁轉換功能改名為 EPUB轉換
 - 新增字型轉換功能，輸出 `.epdfont`
 - 字型大小可調整並記住上次設定，預設對齊 CrossPoint 工具的 `18`
+- 字型轉換結果頁新增「儲存」與「上傳」
 - EPUB 與快速連結轉換預設使用 2-bit `.xtch`
+- EPUB 轉換移除 X3 型號選項，固定以 X4 `480x800` 輸出
+- EPUB 檔案選擇改為支援 MIME 標錯的 Downloads 檔案，並以 `.epub` 副檔名驗證
+- EPUB 轉換進度改為顯示 `0%` 到 `100%`
 - 圖片工具會輸出 `/sleep_mask.png`，對齊 CrossPoint 睡眠圖片格式
+- 桌布方向選擇頁新增返回箭頭
 - 修正連線狀態可能顯示錯誤的問題
 - 新增離線按鈕
+- 底部連線列新增「重新連線」按鈕
 - 新增首頁下拉重新檢查連線與中央 loading
 - 檔案管理、裝置設定與上傳流程改用 device-bound client
+- 上傳改為延後啟動 foreground service，避免快速失敗造成 foreground service timeout 閃退
+- WebSocket 上傳加入分片與送出佇列節流，避免 `WebSocket send queue full`
+- 書本與字型上傳會在原功能頁顯示進行中、成功或失敗
 - Java/Kotlin 編譯目標升級至 17
 
 ## License

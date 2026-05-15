@@ -17,6 +17,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -25,7 +26,12 @@ import androidx.compose.ui.unit.dp
 import wtf.anurag.hojo.ui.i18n.LocalAppStrings
 
 @Composable
-fun ConnectivityBottomBar(isConnected: Boolean, modifier: Modifier = Modifier) {
+fun ConnectivityBottomBar(
+        isConnected: Boolean,
+        isConnecting: Boolean,
+        onReconnect: () -> Unit,
+        modifier: Modifier = Modifier
+) {
     val text = LocalAppStrings.current
     Surface(
             modifier = modifier.fillMaxWidth(),
@@ -35,31 +41,44 @@ fun ConnectivityBottomBar(isConnected: Boolean, modifier: Modifier = Modifier) {
         // Add safe area padding for navigation bar
         val navBarPadding = WindowInsets.navigationBars.asPaddingValues()
 
-        Row(
+        Box(
                 modifier =
                         Modifier.padding(navBarPadding)
                                 .height(56.dp) // Standard height, adjustable
-                                .padding(horizontal = 16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp)
         ) {
-            // Status Dot
-            Box(
-                    modifier =
-                            Modifier.size(8.dp)
-                                    .background(
-                                            color = if (isConnected) Color.Green else Color.Red,
-                                            shape = CircleShape
-                                    )
-            )
+            Row(
+                    modifier = Modifier.align(Alignment.Center),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+            ) {
+                // Status Dot
+                Box(
+                        modifier =
+                                Modifier.size(8.dp)
+                                        .background(
+                                                color = if (isConnected) Color.Green else Color.Red,
+                                                shape = CircleShape
+                                        )
+                )
 
-            Spacer(modifier = Modifier.width(8.dp))
+                Spacer(modifier = Modifier.width(8.dp))
 
-            // Status Text
-            Text(
-                    text = if (isConnected) text.connected else text.notConnected,
-                    style = MaterialTheme.typography.labelLarge
-            )
+                // Status Text
+                Text(
+                        text = if (isConnected) text.connected else text.notConnected,
+                        style = MaterialTheme.typography.labelLarge
+                )
+            }
+
+            TextButton(
+                    onClick = onReconnect,
+                    enabled = !isConnecting,
+                    modifier = Modifier.align(Alignment.CenterEnd)
+            ) {
+                Text(text.reconnect)
+            }
         }
     }
 }

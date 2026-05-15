@@ -55,7 +55,7 @@ constructor(
         }
     }
 
-    fun addTask(uri: Uri, fileName: String, targetPath: String) {
+    fun addTask(uri: Uri, fileName: String, targetPath: String): String {
         val newTask =
                 TaskItem(
                         id = UUID.randomUUID().toString(),
@@ -67,6 +67,7 @@ constructor(
         _tasks.value = _tasks.value + newTask
         Log.d(TAG, "Added task: ${newTask.id} (${newTask.fileName})")
         processQueue()
+        return newTask.id
     }
 
     fun cancelTask(taskId: String) {
@@ -149,51 +150,70 @@ constructor(
         Log.d(TAG, "Starting upload for task: ${task.id}")
         updateTask(task.id) { it.copy(status = TaskStatus.UPLOADING) }
 
-        val intent =
-                android.content.Intent(context, wtf.anurag.hojo.service.UploadService::class.java)
-        intent.action = "START_UPLOAD"
-        intent.putExtra("TASK_ID", task.id)
-
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-            context.startForegroundService(intent)
-        } else {
-            context.startService(intent)
-        }
-
         currentUploadJob =
                 scope.launch {
                     var tempFile: File? = null
                     try {
-                        // 1. Prepare Network
-                        if (!connectivityManager.isConnected.value) {
+                        // 1. Prepare Network. The repository can be connected through a direct
+                        // LAN/baseUrl path even when the lower-level hotspot manager is false.
+                        if (!connectivityRepository.isConnected.value &&
+                                        !connectivityManager.isConnected.value
+                        ) {
                             val connected = connectivityManager.connectToDevice()
                             if (!connected) {
-                                throw Exception("Device not connected")
+                                runCatching { connectivityRepository.checkConnection() }
+                                if (!connectivityRepository.isConnected.value) {
+                                    throw Exception("Device not connected")
+                                }
                             }
                         }
 
                         val baseUrl = connectivityRepository.deviceBaseUrl.value
 
-                        // 2. Prepare File
-                        tempFile =
-                                File(context.cacheDir, "upload_${System.currentTimeMillis()}.tmp")
+                        // 2. Prepare File. Generated converter outputs already live in app cache
+                        // as file:// URIs, so upload them directly instead of re-opening through
+                        // ContentResolver and copying large XTC/XTCH files into another temp file.
+                        val sourceFile =
+                                if (task.uri.scheme == "file") {
+                                    task.uri.path?.let(::File)?.takeIf { it.exists() && it.isFile }
+                                } else {
+                                    null
+                                }
+                        val uploadFile =
+                                if (sourceFile != null) {
+                                    sourceFile
+                                } else {
+                                    tempFile =
+                                            File(
+                                                    context.cacheDir,
+                                                    "upload_${System.currentTimeMillis()}.tmp"
+                                            )
 
-                        val expectedBytes = queryContentLength(task.uri)
-                        context.contentResolver.openInputStream(task.uri)?.use { inputStream ->
-                            FileOutputStream(tempFile).use { output -> inputStream.copyTo(output) }
-                        } ?: throw Exception("Could not open file stream")
+                                    context.contentResolver.openInputStream(task.uri)?.use {
+                                            inputStream ->
+                                        FileOutputStream(tempFile!!).use { output ->
+                                            inputStream.copyTo(output)
+                                        }
+                                    } ?: throw Exception("Could not open file stream")
 
-                        val totalBytes = expectedBytes ?: tempFile.length()
+                                    tempFile!!
+                                }
+
+                        val totalBytes = queryContentLength(task.uri) ?: uploadFile.length()
                         updateTask(task.id) { it.copy(totalBytes = totalBytes) }
 
-                        // 3. Upload
+                        // 3. Upload. Start the foreground service only after the upload is
+                        // actually ready to begin; fast connection/file failures should not start
+                        // a foreground service that Android can later kill for timing out.
+                        startUploadService(task.id)
+
                         var startTime = System.currentTimeMillis()
                         var lastUpdateTime = 0L
                         var lastBytesWritten = 0L
 
                         fileManagerRepository.uploadFileWebSocket(
                                 baseUrl = baseUrl,
-                                file = tempFile,
+                                file = uploadFile,
                                 targetPath = task.targetPath
                         ) { bytesWritten, total ->
                             val now = System.currentTimeMillis()
@@ -233,6 +253,7 @@ constructor(
                             updateTask(task.id) { it.copy(status = TaskStatus.CANCELLED) }
                         } else {
                             Log.e(TAG, "Upload failed for task: ${task.id}", e)
+                            runCatching { connectivityRepository.checkConnection() }
                             updateTask(task.id) {
                                 it.copy(status = TaskStatus.FAILED, error = e.message)
                             }
@@ -244,5 +265,18 @@ constructor(
                         processQueue()
                     }
                 }
+    }
+
+    private fun startUploadService(taskId: String) {
+        val intent =
+                android.content.Intent(context, wtf.anurag.hojo.service.UploadService::class.java)
+        intent.action = "START_UPLOAD"
+        intent.putExtra("TASK_ID", taskId)
+
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            context.startForegroundService(intent)
+        } else {
+            context.startService(intent)
+        }
     }
 }

@@ -12,9 +12,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -41,16 +44,23 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import wtf.anurag.hojo.ui.apps.converter.ConverterUploadPhase
+import wtf.anurag.hojo.ui.apps.converter.ConverterUploadState
+import wtf.anurag.hojo.ui.i18n.AppStrings
 import wtf.anurag.hojo.ui.i18n.LocalAppStrings
+import wtf.anurag.hojo.ui.viewmodels.ConnectivityViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @RequiresApi(Build.VERSION_CODES.Q)
 @Composable
 fun FontConverterApp(onBack: () -> Unit) {
     val viewModel: FontConverterViewModel = hiltViewModel()
+    val connectivityViewModel: ConnectivityViewModel = hiltViewModel()
     val status by viewModel.status.collectAsState()
     val selectedFileName by viewModel.selectedFileName.collectAsState()
     val fontSize by viewModel.fontSize.collectAsState()
+    val uploadState by viewModel.uploadState.collectAsState()
+    val isConnected by connectivityViewModel.isConnected.collectAsState()
     val text = LocalAppStrings.current
 
     val filePickerLauncher =
@@ -65,7 +75,7 @@ fun FontConverterApp(onBack: () -> Unit) {
                         title = { Text(text.fontConverter) },
                         navigationIcon = {
                             IconButton(onClick = onBack) {
-                                Icon(Icons.Filled.ArrowBack, contentDescription = text.back)
+                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = text.back)
                             }
                         },
                         colors =
@@ -178,12 +188,64 @@ fun FontConverterApp(onBack: () -> Unit) {
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                    is FontConverterStatus.Saved -> {
+                    is FontConverterStatus.Converted -> {
                         Text(
-                                text = text.fontConvertSaved(current.fileName, current.location),
+                                text = if (current.isSaved && current.savedLocation != null) {
+                                    text.fontConvertSaved(current.outputFile.name, current.savedLocation)
+                                } else {
+                                    "${text.completed}: ${current.outputFile.name}"
+                                },
                                 color = Color(0xFF2E7D32),
                                 fontWeight = FontWeight.Bold
                         )
+                        Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            OutlinedButton(
+                                    onClick = { viewModel.saveToDownloads(current.outputFile) },
+                                    enabled = !current.isSaved,
+                                    modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(
+                                        Icons.Filled.Download,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(if (current.isSaved) text.saved else text.save)
+                            }
+
+                            Button(
+                                    onClick = {
+                                        viewModel.uploadToEpaper(
+                                                current.outputFile,
+                                                text.uploadQueuedInTasks,
+                                                text.deviceNotConnected,
+                                                text.uploadSuccessful,
+                                                text.failed,
+                                                isConnected
+                                        )
+                                    },
+                                    enabled = isConnected && !uploadState.isInProgress,
+                                    modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(
+                                        Icons.Filled.Upload,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                        when {
+                                            uploadState.isInProgress -> text.uploading
+                                            isConnected -> text.upload
+                                            else -> text.uploadRequiresConnection
+                                        }
+                                )
+                            }
+                        }
+                        FontUploadStatusMessage(uploadState, text)
                         OutlinedButton(onClick = { viewModel.reset() }) {
                             Text(text.convertAnother)
                         }
@@ -204,5 +266,48 @@ fun FontConverterApp(onBack: () -> Unit) {
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun FontUploadStatusMessage(uploadState: ConverterUploadState, text: AppStrings) {
+    val message =
+            when (uploadState.phase) {
+                ConverterUploadPhase.IDLE -> null
+                ConverterUploadPhase.QUEUED -> text.uploadQueuedInTasks
+                ConverterUploadPhase.UPLOADING -> text.uploading
+                ConverterUploadPhase.COMPLETED -> text.uploadSuccessful
+                ConverterUploadPhase.FAILED ->
+                        "${text.failed}: ${localizedFontUploadError(uploadState.error, text)}"
+                ConverterUploadPhase.CANCELLED -> text.cancelled
+            }
+
+    if (message == null) return
+
+    if (uploadState.phase == ConverterUploadPhase.UPLOADING) {
+        LinearProgressIndicator(
+                progress = { uploadState.progress },
+                modifier = Modifier.fillMaxWidth()
+        )
+    }
+
+    val color =
+            when (uploadState.phase) {
+                ConverterUploadPhase.FAILED -> MaterialTheme.colorScheme.error
+                ConverterUploadPhase.COMPLETED -> MaterialTheme.colorScheme.primary
+                else -> MaterialTheme.colorScheme.onSurfaceVariant
+            }
+    Text(
+            text = message,
+            color = color,
+            style = MaterialTheme.typography.bodySmall
+    )
+}
+
+private fun localizedFontUploadError(error: String?, text: AppStrings): String {
+    return when (error) {
+        "Device not connected" -> text.deviceNotConnected
+        null -> ""
+        else -> error
     }
 }

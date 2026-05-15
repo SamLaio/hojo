@@ -13,13 +13,16 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import wtf.anurag.hojo.data.FileManagerRepository
+import wtf.anurag.hojo.data.model.TaskStatus
 import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
 
@@ -39,12 +42,19 @@ class ConverterViewModel @Inject constructor(
     private val _selectedFile = MutableStateFlow<Uri?>(null)
     val selectedFile: StateFlow<Uri?> = _selectedFile.asStateFlow()
 
+    private val _selectedFileName = MutableStateFlow<String?>(null)
+    val selectedFileName: StateFlow<String?> = _selectedFileName.asStateFlow()
+
     private val _availableFonts = MutableStateFlow<List<File>>(emptyList())
     val availableFonts: StateFlow<List<File>> = _availableFonts.asStateFlow()
+
+    private val _uploadState = MutableStateFlow(ConverterUploadState())
+    val uploadState: StateFlow<ConverterUploadState> = _uploadState.asStateFlow()
 
     // WebView-based converter (initialized lazily on first conversion)
     private var webViewConverter: WebViewConverter? = null
     private var converterInitialized = false
+    private var uploadObserverJob: Job? = null
 
     init {
         loadFonts()
@@ -108,8 +118,16 @@ class ConverterViewModel @Inject constructor(
         }
     }
 
-    fun selectFile(uri: Uri) {
+    fun selectFile(uri: Uri, invalidFileMessage: String = "Please select an .epub file") {
+        val fileName = getFileName(uri)
+        if (!fileName.endsWith(".epub", ignoreCase = true)) {
+            _selectedFile.value = null
+            _selectedFileName.value = null
+            _status.value = ConverterStatus.Error(invalidFileMessage)
+            return
+        }
         _selectedFile.value = uri
+        _selectedFileName.value = fileName
         _status.value = ConverterStatus.Idle
     }
 
@@ -168,7 +186,7 @@ class ConverterViewModel @Inject constructor(
                     return@launch
                 }
 
-                _status.value = ConverterStatus.Converting(0, 0)
+                _status.value = ConverterStatus.Converting(0, 100)
 
                 val epubBytes = withContext(Dispatchers.IO) { inputStream.use { it.readBytes() } }
 
@@ -196,24 +214,126 @@ class ConverterViewModel @Inject constructor(
     fun reset() {
         _status.value = ConverterStatus.Idle
         _selectedFile.value = null
+        _selectedFileName.value = null
+        _uploadState.value = ConverterUploadState()
+        uploadObserverJob?.cancel()
+        uploadObserverJob = null
     }
 
     // Accept baseUrl string so this method doesn't directly depend on ConnectivityViewModel's API level
-    fun uploadToEpaper(file: File, baseUrl: String) {
+    fun uploadToEpaper(
+        file: File,
+        baseUrl: String,
+        uploadQueuedMessage: String = "Upload queued in Tasks",
+        notConnectedMessage: String = "Device not connected",
+        uploadSuccessfulMessage: String = "Upload Successful!",
+        uploadFailedMessage: String = "Upload failed",
+        isConnected: Boolean = true
+    ) {
         viewModelScope.launch {
             try {
-                _status.value = ConverterStatus.Uploading
+                if (!isConnected) {
+                    _uploadState.value =
+                        ConverterUploadState(
+                            phase = ConverterUploadPhase.FAILED,
+                            error = "Device not connected"
+                        )
+                    showToast(notConnectedMessage)
+                    return@launch
+                }
 
                 val fileName = file.name
                 val targetPath = "/$fileName"
 
-                // Queue upload
-                taskRepository.addTask(android.net.Uri.fromFile(file), fileName, targetPath)
-
-                _status.value = ConverterStatus.UploadSuccess
+                _uploadState.value = ConverterUploadState(phase = ConverterUploadPhase.QUEUED)
+                val taskId = taskRepository.addTask(android.net.Uri.fromFile(file), fileName, targetPath)
+                showToast(uploadQueuedMessage)
+                observeUploadTask(taskId, notConnectedMessage, uploadSuccessfulMessage, uploadFailedMessage)
             } catch (e: Exception) {
-                _status.value = ConverterStatus.Error("Upload failed: ${e.message}")
+                _uploadState.value =
+                    ConverterUploadState(
+                        phase = ConverterUploadPhase.FAILED,
+                        error = e.message
+                    )
+                showToast("$uploadFailedMessage: ${e.message ?: ""}")
             }
+        }
+    }
+
+    private fun observeUploadTask(
+        taskId: String,
+        notConnectedMessage: String,
+        uploadSuccessfulMessage: String,
+        uploadFailedMessage: String
+    ) {
+        uploadObserverJob?.cancel()
+        uploadObserverJob =
+            viewModelScope.launch {
+                taskRepository.tasks.collect { tasks ->
+                    val task = tasks.find { it.id == taskId } ?: return@collect
+                    when (task.status) {
+                        TaskStatus.QUEUED ->
+                            _uploadState.value =
+                                ConverterUploadState(phase = ConverterUploadPhase.QUEUED)
+                        TaskStatus.UPLOADING ->
+                            _uploadState.value =
+                                ConverterUploadState(
+                                    phase = ConverterUploadPhase.UPLOADING,
+                                    progress = task.progress
+                                )
+                        TaskStatus.COMPLETED -> {
+                            _uploadState.value =
+                                ConverterUploadState(
+                                    phase = ConverterUploadPhase.COMPLETED,
+                                    progress = 1f
+                                )
+                            showToast(uploadSuccessfulMessage)
+                            uploadObserverJob?.cancel()
+                            uploadObserverJob = null
+                        }
+                        TaskStatus.FAILED -> {
+                            _uploadState.value =
+                                ConverterUploadState(
+                                    phase = ConverterUploadPhase.FAILED,
+                                    error = task.error
+                                )
+                            val localizedError = localizeUploadError(task.error, notConnectedMessage)
+                            showToast("$uploadFailedMessage: $localizedError")
+                            uploadObserverJob?.cancel()
+                            uploadObserverJob = null
+                        }
+                        TaskStatus.CANCELLED -> {
+                            _uploadState.value =
+                                ConverterUploadState(phase = ConverterUploadPhase.CANCELLED)
+                            uploadObserverJob?.cancel()
+                            uploadObserverJob = null
+                        }
+                    }
+                }
+            }
+    }
+
+    private fun localizeUploadError(error: String?, notConnectedMessage: String): String {
+        return when (error) {
+            "Device not connected" -> notConnectedMessage
+            null -> ""
+            else -> error
+        }
+    }
+
+    private fun showToast(message: String) {
+        android.widget.Toast.makeText(
+            getApplication(),
+            message,
+            android.widget.Toast.LENGTH_SHORT
+        ).show()
+    }
+
+    private fun crossPointBookMimeType(fileName: String): String {
+        return when (fileName.substringAfterLast('.', "").lowercase()) {
+            "xtch" -> "application/vnd.crosspoint.xtch"
+            "xtc" -> "application/vnd.crosspoint.xtc"
+            else -> "application/octet-stream"
         }
     }
 
@@ -247,7 +367,7 @@ class ConverterViewModel @Inject constructor(
                 val contentValues =
                     ContentValues().apply {
                         put(MediaStore.MediaColumns.DISPLAY_NAME, file.name)
-                        put(MediaStore.MediaColumns.MIME_TYPE, "application/octet-stream")
+                        put(MediaStore.MediaColumns.MIME_TYPE, crossPointBookMimeType(file.name))
                         put(
                             MediaStore.MediaColumns.RELATIVE_PATH,
                             Environment.DIRECTORY_DOWNLOADS

@@ -215,12 +215,19 @@ fun TaskItemCard(task: TaskItem, onCancel: (String) -> Unit, onRetry: (String) -
             } else if (task.status == TaskStatus.FAILED && task.error != null) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                        text = "${text.error}: ${task.error}",
+                        text = "${text.error}: ${localizedTaskError(task.error, text)}",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.error
                 )
             }
         }
+    }
+}
+
+fun localizedTaskError(error: String?, text: wtf.anurag.hojo.ui.i18n.AppStrings): String {
+    return when (error) {
+        "Device not connected" -> text.deviceNotConnected
+        else -> error ?: ""
     }
 }
 

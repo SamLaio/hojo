@@ -89,6 +89,12 @@ fun MainScreen() {
                 } else {
                         remember { mutableStateOf(false) }
                 }
+        val isConnecting by
+                if (connectivityViewModel != null) {
+                        connectivityViewModel.isConnecting.collectAsState()
+                } else {
+                        remember { mutableStateOf(false) }
+                }
 
         CompositionLocalProvider(LocalAppStrings provides strings) {
         Scaffold(
@@ -96,7 +102,11 @@ fun MainScreen() {
                 bottomBar = {
                         if (currentRoute != "home" && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q
                         ) {
-                                ConnectivityBottomBar(isConnected = isConnected)
+                                ConnectivityBottomBar(
+                                        isConnected = isConnected,
+                                        isConnecting = isConnecting,
+                                        onReconnect = { connectivityViewModel?.handleConnect() }
+                                )
                         }
                 }
         ) { innerPadding ->
@@ -231,7 +241,8 @@ fun MainScreen() {
                                                 },
                                                 onSaveToDownloads = { /* Not implemented for quick links */
                                                 },
-                                                isSaved = false
+                                                isSaved = false,
+                                                uploadEnabled = isConnected
                                         )
                                 } else {
                                         val homeScrollState = rememberScrollState()

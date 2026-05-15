@@ -8,8 +8,6 @@ import java.io.File
  */
 data class ConverterSettings(
     // ── Device ────────────────────────────────────────────────────────────
-    /** "x4" = Xteink X4 (480×800), "x3" = Xteink X3 (528×792) */
-    val deviceType: String = "x4",
     /** Rotation in degrees: 0, 90, 180, 270 */
     val orientation: Int = 0,
 
@@ -76,8 +74,8 @@ data class ConverterSettings(
     enum class ColorMode { MONOCHROME, GRAYSCALE_4 }
 
     val bookExtension: String get() = if (colorMode == ColorMode.MONOCHROME) "xtc" else "xtch"
-    val deviceWidth: Int get() = if (deviceType == "x3") 528 else 480
-    val deviceHeight: Int get() = if (deviceType == "x3") 792 else 800
+    val deviceWidth: Int get() = 480
+    val deviceHeight: Int get() = 800
 }
 
 sealed class ConverterStatus {
@@ -89,4 +87,22 @@ sealed class ConverterStatus {
     object Uploading : ConverterStatus()
     object UploadSuccess : ConverterStatus()
     data class Error(val message: String) : ConverterStatus()
+}
+
+enum class ConverterUploadPhase {
+    IDLE,
+    QUEUED,
+    UPLOADING,
+    COMPLETED,
+    FAILED,
+    CANCELLED
+}
+
+data class ConverterUploadState(
+    val phase: ConverterUploadPhase = ConverterUploadPhase.IDLE,
+    val progress: Float = 0f,
+    val error: String? = null
+) {
+    val isInProgress: Boolean
+        get() = phase == ConverterUploadPhase.QUEUED || phase == ConverterUploadPhase.UPLOADING
 }

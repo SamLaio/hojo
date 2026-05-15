@@ -5,9 +5,9 @@ import android.content.ContentValues
 import android.content.Context
 import android.net.Uri
 import android.os.Environment
-import android.provider.DocumentsContract
 import android.provider.MediaStore
 import android.provider.OpenableColumns
+import android.widget.Toast
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -16,22 +16,35 @@ import java.io.FileOutputStream
 import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import wtf.anurag.hojo.data.TaskRepository
+import wtf.anurag.hojo.data.model.TaskStatus
+import wtf.anurag.hojo.ui.apps.converter.ConverterUploadPhase
+import wtf.anurag.hojo.ui.apps.converter.ConverterUploadState
 
 sealed class FontConverterStatus {
     data object Idle : FontConverterStatus()
     data object ReadingFile : FontConverterStatus()
     data class Converting(val current: Int, val total: Int) : FontConverterStatus()
-    data class Saved(val fileName: String, val location: String) : FontConverterStatus()
+    data class Converted(
+            val outputFile: File,
+            val isSaved: Boolean = false,
+            val savedLocation: String? = null
+    ) : FontConverterStatus()
     data class Error(val message: String) : FontConverterStatus()
 }
 
 @HiltViewModel
-class FontConverterViewModel @Inject constructor(application: Application) :
+class FontConverterViewModel @Inject constructor(
+        application: Application,
+        private val taskRepository: TaskRepository
+) :
         AndroidViewModel(application) {
     companion object {
         private const val PREFS_NAME = "font_converter"
@@ -56,6 +69,11 @@ class FontConverterViewModel @Inject constructor(application: Application) :
                     }
             )
     val fontSize: StateFlow<Int> = _fontSize.asStateFlow()
+
+    private val _uploadState = MutableStateFlow(ConverterUploadState())
+    val uploadState: StateFlow<ConverterUploadState> = _uploadState.asStateFlow()
+
+    private var uploadObserverJob: Job? = null
 
     fun updateFontSize(value: Int) {
         val normalized = value.coerceIn(8, 96)
@@ -98,8 +116,8 @@ class FontConverterViewModel @Inject constructor(application: Application) :
                                     }
                         }
 
-                val savedLocation = saveBesideSourceOrDownloads(uri, outputName, bytes)
-                _status.value = FontConverterStatus.Saved(outputName, savedLocation)
+                val outputFile = writeToCache(outputName, bytes)
+                _status.value = FontConverterStatus.Converted(outputFile)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -111,6 +129,9 @@ class FontConverterViewModel @Inject constructor(application: Application) :
 
     fun reset() {
         _selectedFileName.value = null
+        _uploadState.value = ConverterUploadState()
+        uploadObserverJob?.cancel()
+        uploadObserverJob = null
         _status.value = FontConverterStatus.Idle
     }
 
@@ -124,61 +145,175 @@ class FontConverterViewModel @Inject constructor(application: Application) :
                 tempFile
             }
 
-    private suspend fun saveBesideSourceOrDownloads(
-            sourceUri: Uri,
+    private suspend fun writeToCache(
             outputName: String,
             bytes: ByteArray
-    ): String =
+    ): File =
             withContext(Dispatchers.IO) {
-                saveBesideSource(sourceUri, outputName, bytes)
-                        ?: saveToDownloads(outputName, bytes)
+                File(getApplication<Application>().cacheDir, outputName).also { outputFile ->
+                    outputFile.writeBytes(bytes)
+                }
             }
 
-    private fun saveBesideSource(sourceUri: Uri, outputName: String, bytes: ByteArray): String? {
-        val resolver = getApplication<Application>().contentResolver
-
-        if (sourceUri.scheme == "file") {
-            val sourceFile = File(sourceUri.path ?: return null)
-            val parent = sourceFile.parentFile ?: return null
-            File(parent, outputName).writeBytes(bytes)
-            return parent.absolutePath
+    fun saveToDownloads(file: File) {
+        if (!file.exists()) {
+            showToast("File not found: ${file.name}")
+            return
         }
 
-        if (!DocumentsContract.isDocumentUri(getApplication(), sourceUri)) return null
-        val authority = sourceUri.authority ?: return null
-        val documentId = DocumentsContract.getDocumentId(sourceUri)
-        val parentId = documentId.substringBeforeLast('/', missingDelimiterValue = "")
-        if (parentId.isBlank() || parentId == documentId) return null
-
-        return try {
-            val parentUri = DocumentsContract.buildDocumentUri(authority, parentId)
-            val outputUri =
-                    DocumentsContract.createDocument(
-                            resolver,
-                            parentUri,
-                            "application/octet-stream",
-                            outputName
-                    ) ?: return null
-            resolver.openOutputStream(outputUri, "w")?.use { it.write(bytes) } ?: return null
-            outputUri.toString()
-        } catch (_: Exception) {
-            null
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val savedLocation = saveFileToDownloads(file)
+                val current = _status.value
+                if (current is FontConverterStatus.Converted && current.outputFile == file) {
+                    _status.value =
+                            current.copy(isSaved = true, savedLocation = savedLocation)
+                }
+                showToast("Saved")
+            } catch (e: Exception) {
+                showToast("Save failed: ${e.message ?: ""}")
+            }
         }
     }
 
-    private fun saveToDownloads(outputName: String, bytes: ByteArray): String {
+    private fun saveFileToDownloads(file: File): String {
         val resolver = getApplication<Application>().contentResolver
         val values =
                 ContentValues().apply {
-                    put(MediaStore.MediaColumns.DISPLAY_NAME, outputName)
-                    put(MediaStore.MediaColumns.MIME_TYPE, "application/octet-stream")
+                    put(MediaStore.MediaColumns.DISPLAY_NAME, file.name)
+                    put(MediaStore.MediaColumns.MIME_TYPE, "application/vnd.crosspoint.epdffont")
                     put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
                 }
         val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
                 ?: error("Failed to create output file")
-        resolver.openOutputStream(uri, "w")?.use { it.write(bytes) }
+        resolver.openOutputStream(uri, "w")?.use { output ->
+            file.inputStream().use { input -> input.copyTo(output) }
+        }
                 ?: error("Failed to write output file")
-        return "${Environment.DIRECTORY_DOWNLOADS}/$outputName"
+        return "${Environment.DIRECTORY_DOWNLOADS}/${file.name}"
+    }
+
+    fun uploadToEpaper(
+            file: File,
+            uploadQueuedMessage: String = "Upload queued in Tasks",
+            notConnectedMessage: String = "Device not connected",
+            uploadSuccessfulMessage: String = "Upload Successful!",
+            uploadFailedMessage: String = "Upload failed",
+            isConnected: Boolean = true
+    ) {
+        viewModelScope.launch {
+            try {
+                if (!isConnected) {
+                    _uploadState.value =
+                            ConverterUploadState(
+                                    phase = ConverterUploadPhase.FAILED,
+                                    error = "Device not connected"
+                            )
+                    showToast(notConnectedMessage)
+                    return@launch
+                }
+
+                if (!file.exists()) {
+                    throw IllegalStateException("File not found: ${file.name}")
+                }
+
+                _uploadState.value = ConverterUploadState(phase = ConverterUploadPhase.QUEUED)
+                val taskId =
+                        taskRepository.addTask(
+                                android.net.Uri.fromFile(file),
+                                file.name,
+                                "/${file.name}"
+                        )
+                showToast(uploadQueuedMessage)
+                observeUploadTask(
+                        taskId,
+                        notConnectedMessage,
+                        uploadSuccessfulMessage,
+                        uploadFailedMessage
+                )
+            } catch (e: Exception) {
+                _uploadState.value =
+                        ConverterUploadState(
+                                phase = ConverterUploadPhase.FAILED,
+                                error = e.message
+                        )
+                showToast("$uploadFailedMessage: ${e.message ?: ""}")
+            }
+        }
+    }
+
+    private fun observeUploadTask(
+            taskId: String,
+            notConnectedMessage: String,
+            uploadSuccessfulMessage: String,
+            uploadFailedMessage: String
+    ) {
+        uploadObserverJob?.cancel()
+        uploadObserverJob =
+                viewModelScope.launch {
+                    taskRepository.tasks.collect { tasks ->
+                        val task = tasks.find { it.id == taskId } ?: return@collect
+                        when (task.status) {
+                            TaskStatus.QUEUED ->
+                                    _uploadState.value =
+                                            ConverterUploadState(
+                                                    phase = ConverterUploadPhase.QUEUED
+                                            )
+                            TaskStatus.UPLOADING ->
+                                    _uploadState.value =
+                                            ConverterUploadState(
+                                                    phase = ConverterUploadPhase.UPLOADING,
+                                                    progress = task.progress
+                                            )
+                            TaskStatus.COMPLETED -> {
+                                _uploadState.value =
+                                        ConverterUploadState(
+                                                phase = ConverterUploadPhase.COMPLETED,
+                                                progress = 1f
+                                        )
+                                showToast(uploadSuccessfulMessage)
+                                uploadObserverJob?.cancel()
+                                uploadObserverJob = null
+                            }
+                            TaskStatus.FAILED -> {
+                                _uploadState.value =
+                                        ConverterUploadState(
+                                                phase = ConverterUploadPhase.FAILED,
+                                                error = task.error
+                                        )
+                                showToast(
+                                        "$uploadFailedMessage: ${
+                                            localizeUploadError(task.error, notConnectedMessage)
+                                        }"
+                                )
+                                uploadObserverJob?.cancel()
+                                uploadObserverJob = null
+                            }
+                            TaskStatus.CANCELLED -> {
+                                _uploadState.value =
+                                        ConverterUploadState(
+                                                phase = ConverterUploadPhase.CANCELLED
+                                        )
+                                uploadObserverJob?.cancel()
+                                uploadObserverJob = null
+                            }
+                        }
+                    }
+                }
+    }
+
+    private fun localizeUploadError(error: String?, notConnectedMessage: String): String {
+        return when (error) {
+            "Device not connected" -> notConnectedMessage
+            null -> ""
+            else -> error
+        }
+    }
+
+    private fun showToast(message: String) {
+        viewModelScope.launch(Dispatchers.Main) {
+            Toast.makeText(getApplication(), message, Toast.LENGTH_SHORT).show()
+        }
     }
 
     private fun getFileName(uri: Uri): String {

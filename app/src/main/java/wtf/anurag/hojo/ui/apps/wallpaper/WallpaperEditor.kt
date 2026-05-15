@@ -234,6 +234,14 @@ fun WallpaperEditor(onBack: () -> Unit, viewModel: WallpaperViewModel = hiltView
                         topBar = {
                                 CenterAlignedTopAppBar(
                                         title = { Text(text.wallpaper) },
+                                        navigationIcon = {
+                                                IconButton(onClick = onBack) {
+                                                        Icon(
+                                                                Icons.AutoMirrored.Filled.ArrowBack,
+                                                                contentDescription = text.back
+                                                        )
+                                                }
+                                        },
                                         colors =
                                                 TopAppBarDefaults.centerAlignedTopAppBarColors(
                                                         containerColor =

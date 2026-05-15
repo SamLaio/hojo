@@ -24,6 +24,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
@@ -58,7 +59,9 @@ fun XtcPreviewScreen(
         onBack: () -> Unit,
         onUpload: () -> Unit,
         onSaveToDownloads: () -> Unit,
-        isSaved: Boolean = false
+        isSaved: Boolean = false,
+        uploadEnabled: Boolean = true,
+        uploadState: ConverterUploadState = ConverterUploadState()
 ) {
     var fileInfo by remember { mutableStateOf<XtcDecoder.XtcFileInfo?>(null) }
     var pageCount by remember { mutableStateOf(0) }
@@ -263,36 +266,52 @@ fun XtcPreviewScreen(
                 }
 
                 // Action buttons
-                Row(
+                Column(
                         modifier =
                                 Modifier.fillMaxWidth()
                                         .background(MaterialTheme.colorScheme.surface)
-                                        .padding(16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                        .padding(16.dp)
                 ) {
-                    OutlinedButton(
-                            onClick = onSaveToDownloads,
-                            enabled = !isSaved,
-                            modifier = Modifier.weight(1f)
+                    Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        Icon(
-                                Icons.Filled.Download,
-                                contentDescription = null,
-                                modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(if (isSaved) text.saved else text.save)
+                        OutlinedButton(
+                                onClick = onSaveToDownloads,
+                                enabled = !isSaved,
+                                modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(
+                                    Icons.Filled.Download,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(if (isSaved) text.saved else text.save)
+                        }
+
+                        Button(
+                                onClick = onUpload,
+                                enabled = uploadEnabled && !uploadState.isInProgress,
+                                modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(
+                                    Icons.Filled.Upload,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                    when {
+                                        uploadState.isInProgress -> text.uploading
+                                        uploadEnabled -> text.upload
+                                        else -> text.uploadRequiresConnection
+                                    }
+                            )
+                        }
                     }
 
-                    Button(onClick = onUpload, modifier = Modifier.weight(1f)) {
-                        Icon(
-                                Icons.Filled.Upload,
-                                contentDescription = null,
-                                modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(text.upload)
-                    }
+                    UploadStatusMessage(uploadState)
                 }
             }
         }
@@ -307,6 +326,55 @@ fun XtcPreviewScreen(
                 onDismiss = { selectedPageIndex = null },
                 onNavigate = { newIndex -> selectedPageIndex = newIndex }
         )
+    }
+}
+
+@Composable
+private fun UploadStatusMessage(uploadState: ConverterUploadState) {
+    val text = LocalAppStrings.current
+    val message =
+            when (uploadState.phase) {
+                ConverterUploadPhase.IDLE -> null
+                ConverterUploadPhase.QUEUED -> text.uploadQueuedInTasks
+                ConverterUploadPhase.UPLOADING -> text.uploading
+                ConverterUploadPhase.COMPLETED -> text.uploadSuccessful
+                ConverterUploadPhase.FAILED ->
+                        "${text.failed}: ${localizedUploadError(uploadState.error, text)}"
+                ConverterUploadPhase.CANCELLED -> text.cancelled
+            }
+
+    if (message == null) return
+
+    Spacer(modifier = Modifier.height(10.dp))
+    if (uploadState.phase == ConverterUploadPhase.UPLOADING) {
+        LinearProgressIndicator(
+                progress = { uploadState.progress },
+                modifier = Modifier.fillMaxWidth()
+        )
+        Spacer(modifier = Modifier.height(6.dp))
+    }
+
+    val color =
+            when (uploadState.phase) {
+                ConverterUploadPhase.FAILED -> MaterialTheme.colorScheme.error
+                ConverterUploadPhase.COMPLETED -> MaterialTheme.colorScheme.primary
+                else -> MaterialTheme.colorScheme.onSurfaceVariant
+            }
+    Text(
+            text = message,
+            color = color,
+            style = MaterialTheme.typography.bodySmall
+    )
+}
+
+private fun localizedUploadError(
+        error: String?,
+        text: wtf.anurag.hojo.ui.i18n.AppStrings
+): String {
+    return when (error) {
+        "Device not connected" -> text.deviceNotConnected
+        null -> ""
+        else -> error
     }
 }
 

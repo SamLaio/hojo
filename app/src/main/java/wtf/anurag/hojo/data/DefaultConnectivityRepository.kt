@@ -7,6 +7,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import wtf.anurag.hojo.connectivity.EpaperConnectivityManager
 import wtf.anurag.hojo.data.model.StorageStatus
 import javax.inject.Inject
@@ -43,8 +46,25 @@ class DefaultConnectivityRepository @Inject constructor(
     private val _manualEndpointError = MutableStateFlow<String?>(null)
     override val manualEndpointError: StateFlow<String?> = _manualEndpointError.asStateFlow()
 
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
     private val preferences by lazy {
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    }
+
+    init {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            scope.launch {
+                connectivityManager.isConnected.collect { managerConnected ->
+                    if (managerConnected) {
+                        _deviceBaseUrl.value = connectivityManager.getDeviceBaseUrl()
+                        _isConnected.value = true
+                    } else if (_isConnected.value && !tryPreferredEndpoints()) {
+                        resetConnectionState()
+                    }
+                }
+            }
+        }
     }
 
     // Delegate to connectivity manager's discovery state
@@ -72,6 +92,7 @@ class DefaultConnectivityRepository @Inject constructor(
             val status = fileManagerRepository.fetchStatus(normalizedUrl)
             _deviceBaseUrl.value = normalizedUrl
             _storageStatus.value = status
+            _isConnected.value = true
             _manualEndpointRequested.value = false
             _manualEndpointError.value = null
             true
@@ -189,6 +210,7 @@ class DefaultConnectivityRepository @Inject constructor(
                 }
                 val status = fileManagerRepository.fetchStatus(_deviceBaseUrl.value)
                 _storageStatus.value = status
+                _isConnected.value = true
             } catch (e: Exception) {
                 e.printStackTrace()
                 resetConnectionState()

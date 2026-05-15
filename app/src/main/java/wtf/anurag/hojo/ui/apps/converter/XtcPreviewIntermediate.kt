@@ -26,7 +26,8 @@ fun XtcPreviewIntermediate(
     onBack: () -> Unit,
     onUpload: () -> Unit,
     onSaveToDownloads: () -> Unit,
-    isSaved: Boolean
+    isSaved: Boolean,
+    uploadEnabled: Boolean = true
 ) {
     val showFull = remember { mutableStateOf(false) }
     val text = LocalAppStrings.current
@@ -41,7 +42,8 @@ fun XtcPreviewIntermediate(
             },
             onUpload = onUpload,
             onSaveToDownloads = onSaveToDownloads,
-            isSaved = isSaved
+            isSaved = isSaved,
+            uploadEnabled = uploadEnabled
         )
         return
     }
@@ -70,9 +72,10 @@ fun XtcPreviewIntermediate(
 
             Button(
                 onClick = onUpload,
+                enabled = uploadEnabled,
                 modifier = Modifier.weight(1f)
             ) {
-                Text(text.upload)
+                Text(if (uploadEnabled) text.upload else text.uploadRequiresConnection)
             }
         }
 

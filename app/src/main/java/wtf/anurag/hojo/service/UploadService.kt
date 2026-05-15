@@ -29,6 +29,7 @@ class UploadService : LifecycleService() {
 
     private var wakeLock: PowerManager.WakeLock? = null
     private var wifiLock: WifiManager.WifiLock? = null
+    private var foregroundStarted = false
 
     override fun onCreate() {
         super.onCreate()
@@ -48,10 +49,11 @@ class UploadService : LifecycleService() {
                 if (activeTask != null) {
                     acquireLocks()
                     val notification = buildNotification(activeTask)
-                    startForeground(NOTIFICATION_ID, notification)
-                } else {
+                    startUploadForeground(notification)
+                } else if (foregroundStarted) {
                     releaseLocks()
                     stopForeground(STOP_FOREGROUND_REMOVE)
+                    foregroundStarted = false
                     stopSelf()
                 }
             }
@@ -87,9 +89,18 @@ class UploadService : LifecycleService() {
         if (intent?.action == "START_UPLOAD") {
             val taskId = intent.getStringExtra("TASK_ID")
             val task = taskRepository.tasks.value.find { it.id == taskId }
-            if (task != null && task.status == TaskStatus.UPLOADING) {
-                // Immediately start foreground to satisfy the promise
-                startForeground(NOTIFICATION_ID, buildNotification(task))
+            // Always enter foreground for a START_UPLOAD request. Android will crash the app if
+            // startForegroundService() is followed by a fast task failure before this call.
+            startUploadForeground(
+                    if (task != null) buildNotification(task)
+                    else buildStatusNotification("Preparing upload", "Starting...")
+            )
+
+            if (task == null || task.status != TaskStatus.UPLOADING) {
+                releaseLocks()
+                stopForeground(STOP_FOREGROUND_REMOVE)
+                foregroundStarted = false
+                stopSelf(startId)
             }
         } else if (intent?.action == "CANCEL_TASK") {
             val taskId = intent.getStringExtra("TASK_ID")
@@ -99,6 +110,11 @@ class UploadService : LifecycleService() {
         }
 
         return START_NOT_STICKY
+    }
+
+    private fun startUploadForeground(notification: android.app.Notification) {
+        startForeground(NOTIFICATION_ID, notification)
+        foregroundStarted = true
     }
 
     private fun buildNotification(task: wtf.anurag.hojo.data.model.TaskItem): android.app.Notification {
@@ -115,6 +131,17 @@ class UploadService : LifecycleService() {
                 "Cancel",
                 getCancelIntent(task.id)
             )
+            .build()
+    }
+
+    private fun buildStatusNotification(title: String, message: String): android.app.Notification {
+        return NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle(title)
+            .setContentText(message)
+            .setSmallIcon(android.R.drawable.stat_sys_upload)
+            .setOnlyAlertOnce(true)
+            .setOngoing(true)
+            .setContentIntent(getPendingIntent())
             .build()
     }
 

@@ -11,7 +11,11 @@ import com.google.gson.reflect.TypeToken
 import java.io.File
 import java.io.IOException
 import java.net.URLEncoder
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import okhttp3.FormBody
@@ -48,6 +52,10 @@ constructor(
         private const val FILE_LIST_PAGE_SIZE = 100
         private const val MAX_FILE_LIST_PAGES = 100
         private const val FILE_LIST_RESPONSE_PREVIEW_LENGTH = 240
+        private const val WEBSOCKET_CHUNK_SIZE = 4096
+        private const val WEBSOCKET_MAX_QUEUED_BYTES = 256 * 1024L
+        private const val WEBSOCKET_QUEUE_POLL_DELAY_MS = 20L
+        private const val WEBSOCKET_QUEUE_DRAIN_TIMEOUT_MS = 30_000L
     }
 
     private suspend fun deviceClientOrFallback(): OkHttpClient {
@@ -453,17 +461,33 @@ constructor(
                 suspendCancellableCoroutine<Unit> { cont ->
                     val request = Request.Builder().url(wsUrl).build()
                     var uploadStarted = false
+                    var uploadJob: Job? = null
+
+                    suspend fun waitForSendQueue(ws: WebSocket) {
+                        var waitedMs = 0L
+                        while (ws.queueSize() > WEBSOCKET_MAX_QUEUED_BYTES) {
+                            delay(WEBSOCKET_QUEUE_POLL_DELAY_MS)
+                            waitedMs += WEBSOCKET_QUEUE_POLL_DELAY_MS
+                            if (waitedMs >= WEBSOCKET_QUEUE_DRAIN_TIMEOUT_MS) {
+                                throw IOException("WebSocket send queue stalled")
+                            }
+                        }
+                    }
 
                     val listener = object : WebSocketListener() {
-                        private fun streamFile(ws: WebSocket) {
+                        private suspend fun streamFile(ws: WebSocket) {
                             try {
-                                val buffer = ByteArray(8192)
+                                val buffer = ByteArray(WEBSOCKET_CHUNK_SIZE)
+                                var bytesQueued = 0L
                                 file.inputStream().use { stream ->
                                     var bytesRead: Int
                                     while (stream.read(buffer).also { bytesRead = it } != -1) {
+                                        waitForSendQueue(ws)
                                         if (!ws.send(buffer.toByteString(0, bytesRead))) {
                                             throw IOException("WebSocket send queue full")
                                         }
+                                        bytesQueued += bytesRead
+                                        onProgress?.invoke(bytesQueued, fileSize)
                                     }
                                 }
                             } catch (e: Exception) {
@@ -473,7 +497,9 @@ constructor(
                         }
 
                         override fun onOpen(ws: WebSocket, response: Response) {
-                            ws.send("START:$filename:$fileSize:$dir")
+                            if (!ws.send("START:$filename:$fileSize:$dir") && cont.isActive) {
+                                cont.resumeWithException(IOException("WebSocket send queue full"))
+                            }
                         }
 
                         override fun onMessage(ws: WebSocket, text: String) {
@@ -481,15 +507,20 @@ constructor(
                                 text == "READY" -> {
                                     if (!uploadStarted) {
                                         uploadStarted = true
-                                        streamFile(ws)
+                                        uploadJob =
+                                                CoroutineScope(Dispatchers.IO).launch {
+                                                    streamFile(ws)
+                                                }
                                     }
                                 }
                                 text == "DONE" -> {
+                                    uploadJob?.cancel()
                                     ws.close(1000, null)
                                     if (cont.isActive) cont.resume(Unit)
                                 }
                                 text.startsWith("ERROR:") -> {
                                     val msg = text.removePrefix("ERROR:")
+                                    uploadJob?.cancel()
                                     ws.close(1000, null)
                                     if (cont.isActive) cont.resumeWithException(
                                         IOException("Device upload error: $msg")
@@ -509,12 +540,16 @@ constructor(
                         }
 
                         override fun onFailure(ws: WebSocket, t: Throwable, response: Response?) {
+                            uploadJob?.cancel()
                             if (cont.isActive) cont.resumeWithException(t)
                         }
                     }
 
                     val ws = wsClient.newWebSocket(request, listener)
-                    cont.invokeOnCancellation { ws.cancel() }
+                    cont.invokeOnCancellation {
+                        uploadJob?.cancel()
+                        ws.cancel()
+                    }
                 }
             }
 }
