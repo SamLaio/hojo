@@ -266,11 +266,11 @@ class QuickLinkViewModel @Inject constructor(
                 val xtcData = converter.convertHtml(
                     html = cleanedHtml,
                     title = title,
-                    settings = ConverterSettings(colorMode = ConverterSettings.ColorMode.MONOCHROME)
+                    settings = ConverterSettings(colorMode = ConverterSettings.ColorMode.GRAYSCALE_4)
                 ) { _, _ -> }
 
                 // Save to temp file
-                val fileName = "${title.take(20).replace(Regex("[^a-zA-Z0-9]"), "_")}.xtc"
+                val fileName = "${title.take(20).replace(Regex("[^a-zA-Z0-9]"), "_")}.xtch"
                 val tempFile = File(getApplication<Application>().cacheDir, fileName)
                 withContext(Dispatchers.IO) { FileOutputStream(tempFile).use { it.write(xtcData) } }
 
@@ -312,7 +312,7 @@ class QuickLinkViewModel @Inject constructor(
                 _converting.value = true
                 
                 // Queue the task
-                val targetPath = "/books/${file.name}"
+                val targetPath = "/${file.name}"
                 taskRepository.addTask(android.net.Uri.fromFile(file), file.name, targetPath)
 
                 // Close preview immediately

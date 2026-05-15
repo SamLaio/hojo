@@ -147,14 +147,38 @@ fun FileGrid(
                                                                                 true
                                                                         ) ||
                                                                                 item.name.endsWith(
+                                                                                        ".jpeg",
+                                                                                        true
+                                                                                ) ||
+                                                                                item.name.endsWith(
                                                                                         ".png",
+                                                                                        true
+                                                                                ) ||
+                                                                                item.name.endsWith(
+                                                                                        ".bmp",
                                                                                         true
                                                                                 ) ->
                                                                                 Icons.Default.Image
                                                                         item.name.endsWith(
-                                                                                ".txt",
+                                                                                ".epub",
                                                                                 true
                                                                         ) ||
+                                                                                item.name.endsWith(
+                                                                                        ".xtc",
+                                                                                        true
+                                                                                ) ||
+                                                                                item.name.endsWith(
+                                                                                        ".xtch",
+                                                                                        true
+                                                                                ) ||
+                                                                                item.name.endsWith(
+                                                                                        ".txt",
+                                                                                        true
+                                                                                ) ||
+                                                                                item.name.endsWith(
+                                                                                        ".md",
+                                                                                        true
+                                                                                ) ||
                                                                                 item.name.endsWith(
                                                                                         ".json",
                                                                                         true

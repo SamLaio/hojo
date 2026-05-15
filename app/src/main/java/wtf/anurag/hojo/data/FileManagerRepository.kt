@@ -24,6 +24,7 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okio.ByteString
 import okio.ByteString.Companion.toByteString
 import wtf.anurag.hojo.connectivity.EpaperConnectivityManager
@@ -250,6 +251,36 @@ constructor(
         }
     }
 
+    private fun buildUploadWebSocketUrl(baseUrl: String): String {
+        val trimmed = baseUrl.trim().trimEnd('/')
+        val normalized =
+                if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+                    trimmed
+                } else {
+                    "http://$trimmed"
+                }
+
+        normalized.toHttpUrlOrNull()?.let { httpUrl ->
+            val host = httpUrl.host.let { if (it.contains(":") && !it.startsWith("[")) "[$it]" else it }
+            return "ws://$host:81/"
+        }
+
+        val host =
+                trimmed
+                        .removePrefix("http://")
+                        .removePrefix("https://")
+                        .substringBefore('/')
+                        .substringBefore('?')
+                        .substringBefore('#')
+                        .substringBefore(':')
+        return "ws://$host:81/"
+    }
+
+    private fun sanitizeWebSocketFilename(filename: String): String {
+        val sanitized = filename.replace(Regex("""[:\\/\r\n]"""), "_").trim()
+        return sanitized.ifBlank { "upload.bin" }
+    }
+
     suspend fun fetchStatus(baseUrl: String): StorageStatus =
             withContext(Dispatchers.IO) {
                 val url = "$baseUrl/api/status"
@@ -404,7 +435,7 @@ constructor(
      *   5. Receive TEXT "PROGRESS:n:total" updates (optional)
      *   6. Receive TEXT "DONE" on success, "ERROR:<msg>" on failure
      *
-     * @param targetPath Full path on device, e.g. "/books/myfile.xtc"
+     * @param targetPath Full path on device, e.g. "/myfile.xtch"
      */
     suspend fun uploadFileWebSocket(
             baseUrl: String,
@@ -413,9 +444,8 @@ constructor(
             onProgress: ((bytesWritten: Long, totalBytes: Long) -> Unit)? = null
     ) =
             withContext(Dispatchers.IO) {
-                val host = baseUrl.removePrefix("http://").removePrefix("https://")
-                val wsUrl = "ws://$host:81"
-                val filename = targetPath.substringAfterLast('/')
+                val wsUrl = buildUploadWebSocketUrl(baseUrl)
+                val filename = sanitizeWebSocketFilename(targetPath.substringAfterLast('/'))
                 val dir = targetPath.substringBeforeLast('/').ifEmpty { "/" }
                 val fileSize = file.length()
                 val wsClient = deviceClientOrFallback()

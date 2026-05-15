@@ -14,7 +14,7 @@ import java.nio.ByteOrder
 import kotlin.math.ceil
 
 data class EpdfFontOptions(
-        val sizePx: Int = 37,
+        val sizePx: Int = 18,
         val bitsPerPixel: Int = 2
 )
 

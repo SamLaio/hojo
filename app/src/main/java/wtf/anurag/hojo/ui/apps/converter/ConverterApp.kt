@@ -29,6 +29,8 @@ private val CDN_FONTS = listOf(
 
 private val WORD_SPACING_OPTIONS = listOf(50, 75, 100, 125, 150, 200)
 
+private data class DropdownOption<T>(val value: T, val label: String)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @RequiresApi(Build.VERSION_CODES.Q)
 @Suppress("DEPRECATION")
@@ -174,9 +176,9 @@ fun SettingsSection(
     Column(modifier = Modifier.fillMaxWidth()) {
 
         // ── Device ──────────────────────────────────────────────────────────────
-        SectionHeader("Device")
+        SectionHeader(text.converterDeviceSection)
 
-        SettingsRow("Device") {
+        SettingsRow(text.converterDeviceType) {
             SegmentedButtonRow {
                 SegmentedButton(
                     selected = settings.deviceType == "x4",
@@ -191,7 +193,7 @@ fun SettingsSection(
             }
         }
 
-        SettingsRow("Orientation") {
+        SettingsRow(text.converterOrientation) {
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 listOf(0 to "0°", 90 to "90°", 180 to "180°", 270 to "270°").forEach { (deg, label) ->
                     FilterChip(
@@ -207,20 +209,21 @@ fun SettingsSection(
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
         // ── Text ────────────────────────────────────────────────────────────────
-        SectionHeader("Text")
+        SectionHeader(text.converterTextSection)
 
         // Font Face (CDN)
         DropdownSetting(
-            label = "Font Face",
-            current = if (settings.fontFamily.isEmpty()) settings.fontFace else "(Custom)",
-            options = CDN_FONTS,
-            onSelect = { onUpdate(settings.copy(fontFace = it, fontFamily = "")) }
+            label = text.converterFontFace,
+            current = settings.fontFace,
+            options = CDN_FONTS.map { DropdownOption(it, it) },
+            onSelect = { onUpdate(settings.copy(fontFace = it, fontFamily = "")) },
+            displayOverride = if (settings.fontFamily.isEmpty()) null else text.converterCustomFont(settings.fontFamily.split("/").last())
         )
 
         // Custom font
         if (settings.fontFamily.isNotEmpty()) {
             Text(
-                "Custom: ${settings.fontFamily.split("/").last()}",
+                text.converterCustomFont(settings.fontFamily.split("/").last()),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.padding(bottom = 4.dp)
@@ -233,41 +236,40 @@ fun SettingsSection(
 
         // Text Alignment
         DropdownSetting(
-            label = "Text Alignment",
-            current = when (settings.textAlign) {
-                -1 -> "Default"
-                0 -> "Left"
-                1 -> "Right"
-                2 -> "Center"
-                3 -> "Justify"
-                else -> "Default"
-            },
-            options = listOf("Default", "Left", "Right", "Center", "Justify"),
-            onSelect = {
-                onUpdate(settings.copy(textAlign = when (it) {
-                    "Left" -> 0; "Right" -> 1; "Center" -> 2; "Justify" -> 3; else -> -1
-                }))
-            }
+            label = text.converterTextAlignment,
+            current = settings.textAlign,
+            options = listOf(
+                DropdownOption(-1, text.converterDefault),
+                DropdownOption(0, text.converterLeft),
+                DropdownOption(1, text.converterRight),
+                DropdownOption(2, text.converterCenter),
+                DropdownOption(3, text.converterJustify)
+            ),
+            onSelect = { onUpdate(settings.copy(textAlign = it)) }
         )
 
         // Word Spacing
         DropdownSetting(
-            label = "Word Spacing",
-            current = "${settings.wordSpacing}%",
-            options = WORD_SPACING_OPTIONS.map { "$it%" },
-            onSelect = { onUpdate(settings.copy(wordSpacing = it.removeSuffix("%").toInt())) }
+            label = text.converterWordSpacing,
+            current = settings.wordSpacing,
+            options = WORD_SPACING_OPTIONS.map { DropdownOption(it, "$it%") },
+            onSelect = { onUpdate(settings.copy(wordSpacing = it)) }
         )
 
         // Hyphenation
         DropdownSetting(
-            label = "Hyphenation",
-            current = when (settings.hyphenation) { 0 -> "Off"; 1 -> "Algorithmic"; else -> "Dictionary" },
-            options = listOf("Off", "Algorithmic", "Dictionary"),
-            onSelect = { onUpdate(settings.copy(hyphenation = when (it) { "Off" -> 0; "Algorithmic" -> 1; else -> 2 })) }
+            label = text.converterHyphenation,
+            current = settings.hyphenation,
+            options = listOf(
+                DropdownOption(0, text.converterHyphenationOff),
+                DropdownOption(1, text.converterHyphenationAlgorithmic),
+                DropdownOption(2, text.converterHyphenationDictionary)
+            ),
+            onSelect = { onUpdate(settings.copy(hyphenation = it)) }
         )
 
         if (settings.hyphenation > 0) {
-            SettingsRow("Hyphenation Language") {
+            SettingsRow(text.converterHyphenationLanguage) {
                 OutlinedTextField(
                     value = settings.hyphenationLang,
                     onValueChange = { onUpdate(settings.copy(hyphenationLang = it)) },
@@ -281,7 +283,7 @@ fun SettingsSection(
 
         // Font Weight
         SliderSetting(
-            label = "Font Weight",
+            label = text.converterFontWeight,
             value = settings.fontWeight,
             displayValue = settings.fontWeight.toString(),
             valueRange = 100f..900f,
@@ -291,7 +293,7 @@ fun SettingsSection(
 
         // Line Height
         SliderSetting(
-            label = "Line Height",
+            label = text.converterLineHeight,
             value = settings.lineHeight,
             displayValue = "${settings.lineHeight}%",
             valueRange = 80f..200f,
@@ -301,7 +303,7 @@ fun SettingsSection(
 
         // Font Size
         SliderSetting(
-            label = "Font Size",
+            label = text.fontSize,
             value = settings.fontSize,
             displayValue = "${settings.fontSize}px",
             valueRange = 14f..48f,
@@ -311,7 +313,7 @@ fun SettingsSection(
 
         // Margin
         SliderSetting(
-            label = "Margin",
+            label = text.converterMargin,
             value = settings.margin,
             displayValue = "${settings.margin}px",
             valueRange = 0f..50f,
@@ -321,7 +323,7 @@ fun SettingsSection(
 
         // Ignore Doc Margins
         CheckboxSetting(
-            label = "Ignore Document Margins",
+            label = text.converterIgnoreDocumentMargins,
             checked = settings.ignoreDocMargins,
             onCheckedChange = { onUpdate(settings.copy(ignoreDocMargins = it)) }
         )
@@ -329,29 +331,27 @@ fun SettingsSection(
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
         // ── Image ───────────────────────────────────────────────────────────────
-        SectionHeader("Image")
+        SectionHeader(text.converterImageSection)
 
         DropdownSetting(
-            label = "Color Mode",
-            current = when (settings.colorMode) {
-                ConverterSettings.ColorMode.GRAYSCALE_4 -> "Grayscale (4-level)"
-                ConverterSettings.ColorMode.MONOCHROME -> "Monochrome (1-bit)"
-            },
-            options = listOf("Grayscale (4-level)", "Monochrome (1-bit)"),
-            onSelect = {
-                onUpdate(settings.copy(colorMode = if (it.startsWith("Mono")) ConverterSettings.ColorMode.MONOCHROME else ConverterSettings.ColorMode.GRAYSCALE_4))
-            }
+            label = text.converterColorMode,
+            current = settings.colorMode,
+            options = listOf(
+                DropdownOption(ConverterSettings.ColorMode.GRAYSCALE_4, text.converterGrayscale4),
+                DropdownOption(ConverterSettings.ColorMode.MONOCHROME, text.converterMonochrome1)
+            ),
+            onSelect = { onUpdate(settings.copy(colorMode = it)) }
         )
 
         CheckboxSetting(
-            label = "Enable Dithering",
+            label = text.converterEnableDithering,
             checked = settings.enableDithering,
             onCheckedChange = { onUpdate(settings.copy(enableDithering = it)) }
         )
 
         if (settings.enableDithering) {
             SliderSetting(
-                label = "Dither Strength",
+                label = text.converterDitherStrength,
                 value = settings.ditherStrength,
                 displayValue = "${settings.ditherStrength}%",
                 valueRange = 0f..100f,
@@ -361,7 +361,7 @@ fun SettingsSection(
         }
 
         CheckboxSetting(
-            label = "Dark Mode (Invert)",
+            label = text.converterDarkModeInvert,
             checked = settings.enableNegative,
             onCheckedChange = { onUpdate(settings.copy(enableNegative = it)) }
         )
@@ -369,33 +369,36 @@ fun SettingsSection(
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
         // ── Progress Bar ────────────────────────────────────────────────────────
-        SectionHeader("Progress Bar")
+        SectionHeader(text.converterProgressBarSection)
 
         CheckboxSetting(
-            label = "Enable Progress Bar",
+            label = text.converterEnableProgressBar,
             checked = settings.enableProgressBar,
             onCheckedChange = { onUpdate(settings.copy(enableProgressBar = it)) }
         )
 
         if (settings.enableProgressBar) {
             DropdownSetting(
-                label = "Position",
-                current = settings.progressPosition.replaceFirstChar { it.uppercase() },
-                options = listOf("Top", "Bottom"),
-                onSelect = { onUpdate(settings.copy(progressPosition = it.lowercase())) }
+                label = text.converterPosition,
+                current = settings.progressPosition,
+                options = listOf(
+                    DropdownOption("top", text.converterTop),
+                    DropdownOption("bottom", text.converterBottom)
+                ),
+                onSelect = { onUpdate(settings.copy(progressPosition = it)) }
             )
 
-            CheckboxSetting("Show Progress Line", settings.showProgressLine) { onUpdate(settings.copy(showProgressLine = it)) }
-            CheckboxSetting("Show Chapter Marks", settings.showChapterMarks) { onUpdate(settings.copy(showChapterMarks = it)) }
-            CheckboxSetting("Show Chapter Progress", settings.showChapterProgress) { onUpdate(settings.copy(showChapterProgress = it)) }
-            CheckboxSetting("Full Width", settings.progressFullWidth) { onUpdate(settings.copy(progressFullWidth = it)) }
-            CheckboxSetting("Show Page Info", settings.showPageInfo) { onUpdate(settings.copy(showPageInfo = it)) }
-            CheckboxSetting("Show Book Percent", settings.showBookPercent) { onUpdate(settings.copy(showBookPercent = it)) }
-            CheckboxSetting("Show Chapter Page", settings.showChapterPage) { onUpdate(settings.copy(showChapterPage = it)) }
-            CheckboxSetting("Show Chapter Percent", settings.showChapterPercent) { onUpdate(settings.copy(showChapterPercent = it)) }
+            CheckboxSetting(text.converterShowProgressLine, settings.showProgressLine) { onUpdate(settings.copy(showProgressLine = it)) }
+            CheckboxSetting(text.converterShowChapterMarks, settings.showChapterMarks) { onUpdate(settings.copy(showChapterMarks = it)) }
+            CheckboxSetting(text.converterShowChapterProgress, settings.showChapterProgress) { onUpdate(settings.copy(showChapterProgress = it)) }
+            CheckboxSetting(text.converterFullWidth, settings.progressFullWidth) { onUpdate(settings.copy(progressFullWidth = it)) }
+            CheckboxSetting(text.converterShowPageInfo, settings.showPageInfo) { onUpdate(settings.copy(showPageInfo = it)) }
+            CheckboxSetting(text.converterShowBookPercent, settings.showBookPercent) { onUpdate(settings.copy(showBookPercent = it)) }
+            CheckboxSetting(text.converterShowChapterPage, settings.showChapterPage) { onUpdate(settings.copy(showChapterPage = it)) }
+            CheckboxSetting(text.converterShowChapterPercent, settings.showChapterPercent) { onUpdate(settings.copy(showChapterPercent = it)) }
 
             SliderSetting(
-                label = "Bar Font Size",
+                label = text.converterBarFontSize,
                 value = settings.progressFontSize,
                 displayValue = "${settings.progressFontSize}px",
                 valueRange = 10f..20f,
@@ -404,7 +407,7 @@ fun SettingsSection(
             )
 
             SliderSetting(
-                label = "Edge Margin",
+                label = text.converterEdgeMargin,
                 value = settings.progressEdgeMargin,
                 displayValue = "${settings.progressEdgeMargin}px",
                 valueRange = 0f..30f,
@@ -413,7 +416,7 @@ fun SettingsSection(
             )
 
             SliderSetting(
-                label = "Side Margin",
+                label = text.converterSideMargin,
                 value = settings.progressSideMargin,
                 displayValue = "${settings.progressSideMargin}px",
                 valueRange = 0f..30f,
@@ -448,17 +451,19 @@ private fun SettingsRow(label: String, content: @Composable () -> Unit) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun DropdownSetting(
+private fun <T> DropdownSetting(
     label: String,
-    current: String,
-    options: List<String>,
-    onSelect: (String) -> Unit
+    current: T,
+    options: List<DropdownOption<T>>,
+    onSelect: (T) -> Unit,
+    displayOverride: String? = null
 ) {
     var expanded by remember { mutableStateOf(false) }
+    val currentLabel = displayOverride ?: options.firstOrNull { it.value == current }?.label.orEmpty()
     SettingsRow(label) {
         ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = it }) {
             OutlinedTextField(
-                value = current,
+                value = currentLabel,
                 onValueChange = {},
                 readOnly = true,
                 trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
@@ -468,8 +473,8 @@ private fun DropdownSetting(
             ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
                 options.forEach { option ->
                     DropdownMenuItem(
-                        text = { Text(option) },
-                        onClick = { onSelect(option); expanded = false }
+                        text = { Text(option.label) },
+                        onClick = { onSelect(option.value); expanded = false }
                     )
                 }
             }

@@ -75,6 +75,7 @@ data class ConverterSettings(
 ) {
     enum class ColorMode { MONOCHROME, GRAYSCALE_4 }
 
+    val bookExtension: String get() = if (colorMode == ColorMode.MONOCHROME) "xtc" else "xtch"
     val deviceWidth: Int get() = if (deviceType == "x3") 528 else 480
     val deviceHeight: Int get() = if (deviceType == "x3") 792 else 800
 }

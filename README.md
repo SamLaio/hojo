@@ -44,7 +44,8 @@ Hojo-Crosspoint 是一個針對 CrossPoint 中文閱讀器調整的 Android comp
 ### EPUB 轉換
 
 - 首頁功能名稱為「EPUB轉換」
-- 選擇 EPUB 檔案後轉換為 XTC
+- 選擇 EPUB 檔案後轉換為 CrossPoint 2-bit 灰階書本格式 `.xtch`
+- 仍可切換 1-bit 黑白模式輸出 `.xtc`
 - 支援預覽轉換結果
 - 可儲存到 Downloads
 - 可上傳到裝置
@@ -54,8 +55,9 @@ Hojo-Crosspoint 是一個針對 CrossPoint 中文閱讀器調整的 Android comp
 
 - 首頁新增「字型轉換」功能，位置在 EPUB 轉換後、設定前
 - 支援選擇 OTF、TTF、TTC 字型檔
-- 轉換輸出 CrossPoint 可用的 `.epdfont`
-- 預設輸出檔名為 `原字型名.epdfont`
+- 轉換輸出 CrossPoint 可用的 `.epdfont` V1 binary 格式
+- 預設字型大小為 `18`
+- 預設輸出檔名為 `原字型名-字型大小.epdfont`，例如 `MyFont-18.epdfont`
 - 預設會輸出到選擇前字型檔所在位置
 - 如果原資料夾無法寫入，會自動輸出到 Downloads
 - 轉換完成後會在畫面上顯示輸出檔案名稱與位置
@@ -65,7 +67,7 @@ Hojo-Crosspoint 是一個針對 CrossPoint 中文閱讀器調整的 Android comp
 
 ### 快速連結
 
-- 可輸入網址並轉換為裝置可讀內容
+- 可輸入網址並轉換為 2-bit `.xtch` 裝置可讀內容
 - 轉換完成後可送到裝置
 - 適合快速把網頁文章丟到閱讀器
 
@@ -75,10 +77,11 @@ Hojo-Crosspoint 是一個針對 CrossPoint 中文閱讀器調整的 Android comp
 - 裁切與調整顯示效果
 - 支援直向與橫向
 - 可調整灰階、對比、亮度、飽和度
+- 輸出為 CrossPoint 可讀取的 `/sleep_mask.png`
 
 ### XTC 渲染器
 
-- 可選擇 `.xtc` 檔案進行檢視
+- 可選擇 `.xtc` 或 `.xtch` 檔案進行檢視
 - 支援頁面預覽與翻頁
 - 用於檢查轉換結果
 
@@ -267,7 +270,9 @@ app/src/main/java/wtf/anurag/hojo/
 - 預設語言為正體中文
 - 首頁轉換功能改名為 EPUB轉換
 - 新增字型轉換功能，輸出 `.epdfont`
-- 字型大小可調整並記住上次設定
+- 字型大小可調整並記住上次設定，預設對齊 CrossPoint 工具的 `18`
+- EPUB 與快速連結轉換預設使用 2-bit `.xtch`
+- 圖片工具會輸出 `/sleep_mask.png`，對齊 CrossPoint 睡眠圖片格式
 - 修正連線狀態可能顯示錯誤的問題
 - 新增離線按鈕
 - 新增首頁下拉重新檢查連線與中央 loading

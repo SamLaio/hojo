@@ -36,7 +36,7 @@ class FontConverterViewModel @Inject constructor(application: Application) :
     companion object {
         private const val PREFS_NAME = "font_converter"
         private const val PREF_FONT_SIZE = "font_size"
-        private const val DEFAULT_FONT_SIZE = 37
+        private const val DEFAULT_FONT_SIZE = 18
     }
 
     private val preferences by lazy {
@@ -50,7 +50,11 @@ class FontConverterViewModel @Inject constructor(application: Application) :
     val selectedFileName: StateFlow<String?> = _selectedFileName.asStateFlow()
 
     private val _fontSize =
-            MutableStateFlow(preferences.getInt(PREF_FONT_SIZE, DEFAULT_FONT_SIZE))
+            MutableStateFlow(
+                    preferences.getInt(PREF_FONT_SIZE, DEFAULT_FONT_SIZE).let { stored ->
+                        if (stored == 37) DEFAULT_FONT_SIZE else stored
+                    }
+            )
     val fontSize: StateFlow<Int> = _fontSize.asStateFlow()
 
     fun updateFontSize(value: Int) {
@@ -75,7 +79,8 @@ class FontConverterViewModel @Inject constructor(application: Application) :
                 _status.value = FontConverterStatus.ReadingFile
 
                 val tempFont = copyToTempFile(uri, fileName)
-                val outputName = "${fileName.substringBeforeLast('.', fileName)}.epdfont"
+                val outputName =
+                        "${fileName.substringBeforeLast('.', fileName)}-${_fontSize.value}.epdfont"
 
                 _status.value = FontConverterStatus.Converting(0, 0)
                 val bytes =

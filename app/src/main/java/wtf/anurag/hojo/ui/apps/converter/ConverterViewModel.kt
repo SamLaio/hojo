@@ -147,6 +147,15 @@ class ConverterViewModel @Inject constructor(
         return result ?: "book.epub"
     }
 
+    private fun sanitizeOutputBaseName(name: String): String {
+        val sanitized =
+            name
+                .replace(Regex("""[\\/:*?"<>|\r\n]"""), "_")
+                .replace(Regex("""\s+"""), "_")
+                .trim('_', '.')
+        return sanitized.ifBlank { "book" }
+    }
+
     fun startConversion() {
         val uri = _selectedFile.value ?: return
         _status.value = ConverterStatus.ReadingFile
@@ -163,12 +172,14 @@ class ConverterViewModel @Inject constructor(
 
                 val epubBytes = withContext(Dispatchers.IO) { inputStream.use { it.readBytes() } }
 
-                val originalName = getFileName(uri).substringBeforeLast(".")
-                val fileName = (originalName + ".xtc").replace(" ", "_")
+                val currentSettings = _settings.value
+                val originalName = sanitizeOutputBaseName(getFileName(uri).substringBeforeLast("."))
+                val fileName =
+                    "$originalName.${currentSettings.bookExtension}"
                 val outputFile = File(getApplication<Application>().cacheDir, fileName)
 
                 val converter = getConverter()
-                converter.convertEpub(epubBytes, outputFile, _settings.value) { current, total ->
+                converter.convertEpub(epubBytes, outputFile, currentSettings) { current, total ->
                     _status.value = ConverterStatus.Converting(current, total)
                 }
 
@@ -194,7 +205,7 @@ class ConverterViewModel @Inject constructor(
                 _status.value = ConverterStatus.Uploading
 
                 val fileName = file.name
-                val targetPath = "/books/$fileName"
+                val targetPath = "/$fileName"
 
                 // Queue upload
                 taskRepository.addTask(android.net.Uri.fromFile(file), fileName, targetPath)

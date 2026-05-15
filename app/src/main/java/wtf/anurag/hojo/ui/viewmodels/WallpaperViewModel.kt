@@ -186,16 +186,15 @@ class WallpaperViewModel @Inject constructor(
                     paint.colorFilter = ColorMatrixColorFilter(colorMatrix)
                     canvas.drawBitmap(bmp, 0f, 0f, paint)
 
-                    // Save to temp file as JPEG
-                    val timestamp = System.currentTimeMillis()
-                    val filename = "wallpaper_$timestamp.jpg"
+                    // CrossPoint firmware reads the root sleep mask PNG for PNG sleep screens.
+                    val filename = "sleep_mask.png"
                     val tempFile = File(getApplication<Application>().cacheDir, filename)
                     FileOutputStream(tempFile).use { out ->
-                        filteredBitmap.compress(Bitmap.CompressFormat.JPEG, 90, out)
+                        filteredBitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
                     }
 
                     // Queue Upload
-                    val targetPath = "/backgrounds/$filename"
+                    val targetPath = "/$filename"
                     taskRepository.addTask(Uri.fromFile(tempFile), filename, targetPath)
 
                     // Clean up

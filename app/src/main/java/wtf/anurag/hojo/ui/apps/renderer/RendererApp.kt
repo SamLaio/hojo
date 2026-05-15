@@ -71,7 +71,7 @@ fun RendererApp(onBack: () -> Unit) {
                     
                     // Copy URI to temp file
                     val inputStream = context.contentResolver.openInputStream(it)
-                    val tempFile = java.io.File(context.cacheDir, "temp_renderer.xtc")
+                    val tempFile = java.io.File(context.cacheDir, "temp_renderer.xtch")
                     val outputStream = java.io.FileOutputStream(tempFile)
                     inputStream?.copyTo(outputStream)
                     inputStream?.close()
