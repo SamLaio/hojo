@@ -23,8 +23,8 @@ import wtf.anurag.hojo.ui.i18n.LocalAppStrings
 import wtf.anurag.hojo.ui.viewmodels.ConnectivityViewModel
 
 private val CDN_FONTS = listOf(
-    "Literata", "Lora", "Merriweather", "Open Sans", "Source Serif 4",
-    "Noto Sans", "Noto Serif", "Roboto", "EB Garamond", "Crimson Pro"
+    "Literata", "Noto Sans CJK TC", "Lora", "Merriweather", "Open Sans",
+    "Source Serif 4", "Noto Sans", "Noto Serif", "Roboto", "EB Garamond", "Crimson Pro"
 )
 
 private val WORD_SPACING_OPTIONS = listOf(50, 75, 100, 125, 150, 200)
@@ -133,7 +133,14 @@ fun ConverterApp(onBack: () -> Unit, connectivityViewModel: ConnectivityViewMode
                         onUpdate = { viewModel.updateSettings(it) },
                         onImportFont = {
                             fontPickerLauncher.launch(
-                                arrayOf("font/ttf", "font/otf", "application/x-font-ttf", "application/x-font-otf")
+                                arrayOf(
+                                    "font/ttf",
+                                    "font/otf",
+                                    "font/collection",
+                                    "application/x-font-ttf",
+                                    "application/x-font-otf",
+                                    "application/x-font-ttc"
+                                )
                             )
                         }
                     )
@@ -240,6 +247,15 @@ fun SettingsSection(
             onClick = onImportFont,
             modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
         ) { Text(text.importCustomFont) }
+
+        if (availableFonts.isNotEmpty()) {
+            DropdownSetting(
+                label = text.importCustomFont,
+                current = settings.fontFamily,
+                options = availableFonts.map { DropdownOption(it.absolutePath, it.name) },
+                onSelect = { onUpdate(settings.copy(fontFamily = it)) }
+            )
+        }
 
         // Text Alignment
         DropdownSetting(

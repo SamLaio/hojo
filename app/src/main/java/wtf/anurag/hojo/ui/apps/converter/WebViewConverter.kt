@@ -47,6 +47,7 @@ class WebViewConverter(private val context: Context) {
     private var outputFile: File? = null
     private var outputStream: FileOutputStream? = null
     private var chunkCount = 0
+    private var systemCjkFontRegistered = false
 
     // ─── JavaScript Interface ─────────────────────────────────────────────────
 
@@ -153,6 +154,14 @@ class WebViewConverter(private val context: Context) {
     private val htmlChunks = mutableListOf<ByteArray>()
     private var readyContinuation: kotlinx.coroutines.CancellableContinuation<Unit>? = null
 
+    private val systemCjkFontCandidates = listOf(
+        "/system/fonts/NotoSansCJK-Regular.ttc",
+        "/system/fonts/NotoSansCJK-VF.ttf.ttc",
+        "/system/fonts/NotoSansTC-Regular.otf",
+        "/system/fonts/NotoSansCJKtc-Regular.otf",
+        "/system/fonts/DroidSansFallback.ttf"
+    )
+
     // ─── Public API ──────────────────────────────────────────────────────────
 
     /**
@@ -167,7 +176,9 @@ class WebViewConverter(private val context: Context) {
             wv.alpha = 0f  // Invisible - headless use only
             wv.settings.apply {
                 javaScriptEnabled = true
+                @Suppress("DEPRECATION")
                 allowFileAccessFromFileURLs = true
+                @Suppress("DEPRECATION")
                 allowUniversalAccessFromFileURLs = true
                 cacheMode = WebSettings.LOAD_NO_CACHE
             }
@@ -246,27 +257,18 @@ class WebViewConverter(private val context: Context) {
             // Apply settings, then load EPUB, then start conversion
             val settingsJson = settingsToJson(settings)
 
-            fun startConversion() {
-                wv.evaluateJavascript("BridgeAPI.startConversion()") { result ->
-                    if (result?.contains("error", ignoreCase = true) == true && !result.contains("null")) {
-                        val ex = RuntimeException("Conversion error: $result")
-                        this@WebViewConverter.conversionContinuation?.resumeWithException(ex)
-                        this@WebViewConverter.conversionContinuation = null
-                    }
-                }
-            }
-
             fun loadEpubChunked() {
                 val totalChunks = (epubBytes.size + EPUB_CHUNK_SIZE - 1) / EPUB_CHUNK_SIZE
 
                 if (totalChunks == 1) {
                     // Single chunk - direct load
                     val base64 = Base64.encodeToString(epubBytes, Base64.NO_WRAP)
-                    wv.evaluateJavascript("BridgeAPI.loadEpubBase64('$base64').then(function(info){ startConversion(); }).catch(function(e){ Android.onError(e.message || String(e)); }); undefined") { _ -> }
-                    // Define startConversion in JS context
                     wv.evaluateJavascript("""
-                        function startConversion() { BridgeAPI.startConversion(); }
-                    """.trimIndent()) { _ -> startConversion() }
+                        BridgeAPI.loadEpubBase64('$base64').then(function(info){
+                            BridgeAPI.startConversion();
+                        }).catch(function(e){ Android.onError(e.message || String(e)); });
+                        undefined
+                    """.trimIndent()) { _ -> }
                 } else {
                     // Multi-chunk load
                     wv.evaluateJavascript("BridgeAPI.beginEpubChunks($totalChunks)") { _ ->
@@ -297,26 +299,84 @@ class WebViewConverter(private val context: Context) {
                 }
             }
 
+            fun registerFontChunked(
+                fontBytes: ByteArray,
+                fontName: String,
+                useAsPrimary: Boolean,
+                onComplete: () -> Unit
+            ) {
+                val totalChunks = (fontBytes.size + EPUB_CHUNK_SIZE - 1) / EPUB_CHUNK_SIZE
+                wv.evaluateJavascript(
+                    "BridgeAPI.beginFontChunks($totalChunks, ${JSONObject.quote(fontName)}, $useAsPrimary)"
+                ) { _ ->
+                    var chunkIndex = 0
+                    fun sendNextChunk() {
+                        if (chunkIndex >= totalChunks) {
+                            wv.evaluateJavascript("BridgeAPI.finishFontChunks()") { _ -> onComplete() }
+                            return
+                        }
+
+                        val start = chunkIndex * EPUB_CHUNK_SIZE
+                        val end = minOf(start + EPUB_CHUNK_SIZE, fontBytes.size)
+                        val chunk = fontBytes.copyOfRange(start, end)
+                        val base64 = Base64.encodeToString(chunk, Base64.NO_WRAP)
+                        val idx = chunkIndex
+                        chunkIndex++
+                        wv.evaluateJavascript("BridgeAPI.addFontChunk('$base64', $idx)") { _ ->
+                            sendNextChunk()
+                        }
+                    }
+                    sendNextChunk()
+                }
+            }
+
+            fun registerSystemCjkThen(next: () -> Unit) {
+                if (systemCjkFontRegistered) {
+                    next()
+                    return
+                }
+
+                val systemFont = systemCjkFontCandidates
+                    .map { File(it) }
+                    .firstOrNull { it.exists() && it.canRead() }
+
+                if (systemFont == null) {
+                    next()
+                    return
+                }
+
+                try {
+                    val fontBytes = systemFont.readBytes()
+                    registerFontChunked(fontBytes, systemFont.name, false) {
+                        systemCjkFontRegistered = true
+                        next()
+                    }
+                } catch (e: Exception) {
+                    next()
+                }
+            }
+
             // Register custom font if specified
             fun applyFontAndLoad() {
-                if (settings.fontFamily.isNotEmpty()) {
-                    try {
-                        val fontBytes = java.io.File(settings.fontFamily).readBytes()
-                        val fontBase64 = Base64.encodeToString(fontBytes, Base64.NO_WRAP)
-                        val fontName = java.io.File(settings.fontFamily).name
-                        wv.evaluateJavascript("BridgeAPI.registerCustomFont('$fontBase64', '$fontName')") { _ ->
+                registerSystemCjkThen {
+                    if (settings.fontFamily.isNotEmpty()) {
+                        try {
+                            val fontFile = File(settings.fontFamily)
+                            val fontBytes = fontFile.readBytes()
+                            registerFontChunked(fontBytes, fontFile.name, true) {
+                                loadEpubChunked()
+                            }
+                        } catch (e: Exception) {
                             loadEpubChunked()
                         }
-                    } catch (e: Exception) {
+                    } else {
                         loadEpubChunked()
                     }
-                } else {
-                    loadEpubChunked()
                 }
             }
 
             // Step 1: Apply settings
-            wv.evaluateJavascript("BridgeAPI.applyAndroidSettings('${settingsJson.replace("'", "\\'")}')") { _ ->
+            wv.evaluateJavascript("BridgeAPI.applyAndroidSettings(${JSONObject.quote(settingsJson)})") { _ ->
                 applyFontAndLoad()
             }
 
@@ -398,7 +458,7 @@ class WebViewConverter(private val context: Context) {
                 }
             }
 
-            wv.evaluateJavascript("BridgeAPI.applyAndroidSettings('${settingsJson.replace("'", "\\'")}')") { _ ->
+            wv.evaluateJavascript("BridgeAPI.applyAndroidSettings(${JSONObject.quote(settingsJson)})") { _ ->
                 sendChunked()
             }
 

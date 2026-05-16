@@ -14,7 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
@@ -71,7 +71,7 @@ fun TasksApp(onBack: () -> Unit, viewModel: TasksViewModel = hiltViewModel()) {
                             title = { Text(text.tasks) },
                             navigationIcon = {
                                 IconButton(onClick = onBack) {
-                                    Icon(Icons.Default.ArrowBack, contentDescription = text.back)
+                                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = text.back)
                                 }
                             },
                             colors =

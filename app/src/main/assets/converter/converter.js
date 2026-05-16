@@ -145,6 +145,11 @@ const FONT_FAMILIES = {
                 // Variable font - one file contains all weights
                 isVariable: true
             },
+            'Noto Sans CJK TC': {
+                variants: [
+                    { file: 'NotoSansCJKtc-Regular.otf', url: 'https://cdn.jsdelivr.net/gh/notofonts/noto-cjk@main/Sans/OTF/TraditionalChinese/NotoSansCJKtc-Regular.otf' }
+                ]
+            },
             'Lora': {
                 variants: [
                     { file: 'Lora-Regular.ttf', url: 'https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/lora/Lora%5Bwght%5D.ttf' },
@@ -222,6 +227,85 @@ const FONT_FAMILIES = {
 
 const loadedFontFamilies = new Set();
 const loadedPatterns = new Set();
+let _registeredFallbackFaces = [];
+
+function buildFallbackFontFaces(primaryFace) {
+            const faces = [
+                primaryFace,
+                ..._registeredFallbackFaces,
+                'Noto Sans CJK TC',
+                'Noto Naskh Arabic',
+                'Literata'
+            ].filter(Boolean);
+            return [...new Set(faces)].join(';');
+        }
+
+function readUtf16Be(data, offset, length) {
+            let result = '';
+            for (let i = 0; i + 1 < length; i += 2) {
+                result += String.fromCharCode((data[offset + i] << 8) | data[offset + i + 1]);
+            }
+            return result;
+        }
+
+function readSingleByteString(data, offset, length) {
+            let result = '';
+            for (let i = 0; i < length; i++) {
+                result += String.fromCharCode(data[offset + i]);
+            }
+            return result;
+        }
+
+function extractFontFamilyName(data) {
+            try {
+                const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
+                let fontOffset = 0;
+                const signature = String.fromCharCode(data[0], data[1], data[2], data[3]);
+                if (signature === 'ttcf') {
+                    const fontCount = view.getUint32(8, false);
+                    if (fontCount > 0) {
+                        fontOffset = view.getUint32(12, false);
+                    }
+                }
+
+                const numTables = view.getUint16(fontOffset + 4, false);
+                let nameOffset = 0;
+                for (let i = 0; i < numTables; i++) {
+                    const offset = fontOffset + 12 + i * 16;
+                    const tag = String.fromCharCode(data[offset], data[offset + 1], data[offset + 2], data[offset + 3]);
+                    if (tag === 'name') {
+                        nameOffset = view.getUint32(offset + 8, false);
+                        break;
+                    }
+                }
+                if (!nameOffset) return '';
+
+                const count = view.getUint16(nameOffset + 2, false);
+                const stringBase = nameOffset + view.getUint16(nameOffset + 4, false);
+                const candidates = [];
+                for (let i = 0; i < count; i++) {
+                    const record = nameOffset + 6 + i * 12;
+                    const platformId = view.getUint16(record, false);
+                    const languageId = view.getUint16(record + 4, false);
+                    const nameId = view.getUint16(record + 6, false);
+                    if (nameId !== 16 && nameId !== 1) continue;
+
+                    const length = view.getUint16(record + 8, false);
+                    const offset = stringBase + view.getUint16(record + 10, false);
+                    const value = (platformId === 0 || platformId === 3)
+                        ? readUtf16Be(data, offset, length)
+                        : readSingleByteString(data, offset, length);
+
+                    const score = (nameId === 16 ? 4 : 2) + (languageId === 0x0409 ? 1 : 0);
+                    candidates.push({ value: value.replace(/\u0000/g, '').trim(), score });
+                }
+                candidates.sort((a, b) => b.score - a.score);
+                return candidates.find(item => item.value)?.value || '';
+            } catch (e) {
+                console.warn('Could not read font family name:', e);
+                return '';
+            }
+        }
 
 async function fetchFontData(url) {
             try {
@@ -301,7 +385,7 @@ async function loadRequiredFonts() {
 
             // Set fallback fonts for Arabic support
             if (renderer.setFallbackFontFaces) {
-                renderer.setFallbackFontFaces('Literata;Noto Naskh Arabic');
+                renderer.setFallbackFontFaces(buildFallbackFontFaces('Literata'));
             }
 
             return loadedFontFamilies.size > 0;
@@ -735,6 +819,10 @@ function applySettings() {
 
             if (settings.fontFace) {
                 renderer.setFontFace(settings.fontFace);
+            }
+
+            if (renderer.setFallbackFontFaces) {
+                renderer.setFallbackFontFaces(buildFallbackFontFaces(settings.fontFace || 'Literata'));
             }
 
             // Set text alignment for paragraphs
@@ -1369,6 +1457,10 @@ async function loadEpubFromData(data, filename) {
     };
 
     const settings = getSettings();
+    if (settings.fontFace && FONT_FAMILIES[settings.fontFace]) {
+        await loadFontFamily(settings.fontFace);
+    }
+
     if (settings.hyphenation) {
         const lang = settings.hyphenationLang === 'auto'
             ? (metadata.language || 'en')

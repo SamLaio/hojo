@@ -18,7 +18,7 @@ import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.foundation.layout.Row
 import androidx.compose.material.icons.filled.GridView
-import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material.icons.filled.Tune
@@ -72,7 +72,7 @@ fun AppDock(
                                 text.wallpaperSub,
                                 Icons.Default.Image
                         ),
-                        DockAction("Tasks", text.tasks, text.tasksSub, Icons.Default.List),
+                        DockAction("Tasks", text.tasks, text.tasksSub, Icons.AutoMirrored.Filled.List),
                         DockAction(
                                 "Renderer",
                                 text.renderer,
@@ -124,7 +124,7 @@ fun AppDock(
                         ) {
                                 Icon(
                                         imageVector =
-                                                if (isGridLayout) Icons.Default.List
+                                                if (isGridLayout) Icons.AutoMirrored.Filled.List
                                                 else Icons.Default.GridView,
                                         contentDescription = text.toggleLayout,
                                         tint = MaterialTheme.colorScheme.onSurfaceVariant

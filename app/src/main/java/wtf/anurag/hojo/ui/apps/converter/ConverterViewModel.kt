@@ -91,7 +91,8 @@ class ConverterViewModel @Inject constructor(
                         fontsDir
                                 .listFiles { file ->
                                     file.extension.equals("ttf", ignoreCase = true) ||
-                                            file.extension.equals("otf", ignoreCase = true)
+                                            file.extension.equals("otf", ignoreCase = true) ||
+                                            file.extension.equals("ttc", ignoreCase = true)
                                 }
                                 ?.toList()
                                 ?.sortedBy { it.name }
@@ -110,6 +111,7 @@ class ConverterViewModel @Inject constructor(
                     val fontsDir = getFontsDir()
                     val destFile = File(fontsDir, fileName)
                     FileOutputStream(destFile).use { output -> inputStream.copyTo(output) }
+                    _settings.value = _settings.value.copy(fontFamily = destFile.absolutePath)
                     loadFonts()
                 }
             } catch (e: Exception) {

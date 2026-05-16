@@ -23,12 +23,13 @@ data class ConverterSettings(
     /**
      * CDN font face name matching FONT_FAMILIES keys in converter.js.
      * Empty string = renderer default.
-     * Values: "Literata", "Lora", "Merriweather", "Open Sans", "Source Serif 4",
-     *         "Noto Sans", "Noto Serif", "Roboto", "EB Garamond", "Crimson Pro"
+     * Values: "Literata", "Noto Sans CJK TC", "Lora", "Merriweather", "Open Sans",
+     *         "Source Serif 4", "Noto Sans", "Noto Serif", "Roboto", "EB Garamond",
+     *         "Crimson Pro"
      */
     val fontFace: String = "Literata",
     /**
-     * Path to an imported custom TTF/OTF font file.
+     * Path to an imported custom TTF/OTF/TTC font file.
      * When set, overrides fontFace.
      */
     val fontFamily: String = "",

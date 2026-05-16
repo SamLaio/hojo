@@ -62,6 +62,9 @@ class FontConverterViewModel @Inject constructor(
     private val _selectedFileName = MutableStateFlow<String?>(null)
     val selectedFileName: StateFlow<String?> = _selectedFileName.asStateFlow()
 
+    private val _selectedCharsetIds = MutableStateFlow(FontCharacterSets.defaultSelectedIds)
+    val selectedCharsetIds: StateFlow<Set<String>> = _selectedCharsetIds.asStateFlow()
+
     private val _fontSize =
             MutableStateFlow(
                     preferences.getInt(PREF_FONT_SIZE, DEFAULT_FONT_SIZE).let { stored ->
@@ -73,6 +76,7 @@ class FontConverterViewModel @Inject constructor(
     private val _uploadState = MutableStateFlow(ConverterUploadState())
     val uploadState: StateFlow<ConverterUploadState> = _uploadState.asStateFlow()
 
+    private var selectedFontFile: File? = null
     private var uploadObserverJob: Job? = null
 
     fun updateFontSize(value: Int) {
@@ -93,20 +97,54 @@ class FontConverterViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 val fileName = getFileName(uri)
-                _selectedFileName.value = fileName
                 _status.value = FontConverterStatus.ReadingFile
 
-                val tempFont = copyToTempFile(uri, fileName)
+                selectedFontFile = copyToTempFile(uri, fileName)
+                _selectedFileName.value = fileName
+                _uploadState.value = ConverterUploadState()
+                _status.value = FontConverterStatus.Idle
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                e.printStackTrace()
+                _status.value = FontConverterStatus.Error(e.message ?: "Failed to read font file")
+            }
+        }
+    }
+
+    fun updateSelectedCharsets(ids: Set<String>) {
+        _selectedCharsetIds.value = ids.ifEmpty { FontCharacterSets.defaultSelectedIds }
+    }
+
+    fun startConversion() {
+        val tempFont = selectedFontFile
+        val fileName = _selectedFileName.value
+        if (tempFont == null || fileName == null) {
+            _status.value = FontConverterStatus.Error("Please select a font file first")
+            return
+        }
+
+        viewModelScope.launch {
+            try {
                 val outputName =
                         "${fileName.substringBeforeLast('.', fileName)}-${_fontSize.value}.epdfont"
+                val codePoints =
+                        FontCharacterSets.buildCodePoints(_selectedCharsetIds.value) { assetName ->
+                            getApplication<Application>().assets.open(assetName)
+                                    .bufferedReader(Charsets.UTF_8)
+                                    .use { it.readText() }
+                        }
 
-                _status.value = FontConverterStatus.Converting(0, 0)
+                _status.value = FontConverterStatus.Converting(0, codePoints.size)
                 val bytes =
                         withContext(Dispatchers.Default) {
                             EpdfFontConverter(getApplication())
                                     .convert(
                                             tempFont,
-                                            EpdfFontOptions(sizePx = _fontSize.value)
+                                            EpdfFontOptions(
+                                                    sizePx = _fontSize.value,
+                                                    candidateCodePoints = codePoints
+                                            )
                                     ) { progress ->
                                         _status.value =
                                                 FontConverterStatus.Converting(
@@ -129,6 +167,7 @@ class FontConverterViewModel @Inject constructor(
 
     fun reset() {
         _selectedFileName.value = null
+        selectedFontFile = null
         _uploadState.value = ConverterUploadState()
         uploadObserverJob?.cancel()
         uploadObserverJob = null

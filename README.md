@@ -2,7 +2,7 @@
 
 Hojo-Crosspoint 是一個針對 CrossPoint 中文閱讀器調整的 Android companion app，用來連線裝置、管理檔案、轉換 EPUB、轉換字型，以及把內容上傳到閱讀器。
 
-目前版本：`cpChTyZh.V1.4`
+目前版本：`cpChTyZh.V1.5`
 
 > 這是以 Hojo 為基礎改作的社群版本，並非 CrossPoint 或原 Hojo 專案的官方發行版。請自行評估風險後使用。
 
@@ -56,6 +56,10 @@ Hojo-Crosspoint 是一個針對 CrossPoint 中文閱讀器調整的 Android comp
 - 可上傳到裝置根目錄
 - 預覽頁上傳時會先顯示已加入任務，上傳完成或失敗後會在原頁面顯示結果
 - 轉換中的進度顯示為 `0%` 到 `100%`
+- 轉換時會優先註冊 Android 系統內建 CJK 字型作為 fallback，減少中文被渲染成 `?` 的情況
+- 自訂字型匯入後會正確套用為 EPUB 轉換字型
+- 自訂字型與系統 CJK 字型會以分片方式傳入 WebView / WASM，避免大型字型因單次 JavaScript 字串過長而失敗
+- 字型選單新增 `Noto Sans CJK TC`
 
 ### 字型轉換
 
@@ -64,6 +68,13 @@ Hojo-Crosspoint 是一個針對 CrossPoint 中文閱讀器調整的 Android comp
 - 轉換輸出 CrossPoint 可用的 `.epdfont` V1 binary 格式
 - 預設字型大小為 `18`
 - 預設輸出檔名為 `原字型名-字型大小.epdfont`，例如 `MyFont-18.epdfont`
+- 選擇字型後不會自動產生，需按下「開始」才會轉換
+- 「開始」按鈕位於選擇字型與選擇字集按鈕下方，並使用滿版寬度
+- 可透過「選擇字集」多選要產生的字元範圍
+- 內建教育部 `4808` 個常用國字與 `6343` 個次常用國字字表，並可離線使用
+- 字集選項包含：正體中文常用字、正體中文次常用字、日文、簡體中文、注音符號、英文、拉丁字母、韓文、希臘文與西里爾文、符號/箭頭/數學
+- 產字時會固定加入數字、基本半形符號、全形符號、中文標點、直排標點，以及橫排/直排破折號
+- 英文字母需勾選「英文」才會加入
 - 轉換完成後會先產生 app 暫存結果，不會自動寫回原資料夾
 - 結果頁提供「儲存」與「上傳」選項
 - 按下「儲存」會輸出到 Downloads
@@ -75,9 +86,13 @@ Hojo-Crosspoint 是一個針對 CrossPoint 中文閱讀器調整的 Android comp
 
 ### 快速連結
 
-- 可輸入網址並轉換為 2-bit `.xtch` 裝置可讀內容
-- 轉換完成後可送到裝置
-- 適合快速把網頁文章丟到閱讀器
+- 可輸入網址，app 會先切到可上網的網路並用隱藏 WebView 載入頁面
+- 透過 bundled `readability-lite.js` 擷取文章主文
+- 會嘗試將 4 MB 以下的圖片轉成 base64 data URL，讓後續離線轉換可保留圖片
+- 擷取出的 HTML 會包成最小 EPUB，再轉換為 2-bit `.xtch` 裝置可讀內容
+- 轉換完成後會切回 CrossPoint 裝置網路並顯示預覽
+- 可將預覽檔加入上傳任務並送到裝置根目錄
+- 適合快速把網頁文章丟到閱讀器；需要登入、反爬或高度動態載入的網頁可能不適合
 
 ### 桌布
 
@@ -144,8 +159,8 @@ applicationId = "wtf.anurag.hojo.crosspoint"
 minSdk = 30
 targetSdk = 35
 compileSdk = 35
-versionCode = 5
-versionName = "cpChTyZh.V1.4"
+versionCode = 6
+versionName = "cpChTyZh.V1.5"
 ```
 
 `minSdk = 30` 代表 Android 11 以上可安裝。
@@ -268,10 +283,21 @@ app/src/main/java/wtf/anurag/hojo/
 
 ## 版本摘要
 
-`cpChTyZh.V1.4` 包含：
+`cpChTyZh.V1.5` 包含：
 
-- 版本號更新為 `cpChTyZh.V1.4`
-- `versionCode` 更新為 `5`
+- 版本號更新為 `cpChTyZh.V1.5`
+- `versionCode` 更新為 `6`
+- EPUB 轉換新增 Android 系統 CJK 字型 fallback，改善中文正文顯示為 `?` 的問題
+- EPUB 轉換修正自訂字型匯入後未真正套用的問題
+- EPUB 轉換改用分片方式註冊自訂字型與系統 CJK 字型，降低大型字型傳入 WebView 失敗機率
+- EPUB 轉換新增 `Noto Sans CJK TC` 字型選項
+- EPUB 小檔案單一 chunk 載入流程修正，避免 EPUB 尚未載入完成就啟動轉換
+- 字型轉換改為「選擇字型」與「開始」分離，避免選檔後立刻產生
+- 字型轉換新增多選字集對話框
+- 字型轉換新增教育部 `4808` 個常用國字與 `6343` 個次常用國字內建字表
+- 字型轉換新增日文、簡體中文、注音、英文、拉丁字母、韓文、希臘文/西里爾文、符號/箭頭/數學等字集選項
+- 字型轉換固定加入數字、基本半形符號、全形符號、中文標點、直排標點與橫/直破折號
+- 字型轉換的英文字母改為需勾選「英文」才會加入
 - 設定頁 GitHub 原始碼連結改為 `https://github.com/SamLaio/hojo`
 - App 名稱改為 Hojo-Crosspoint
 - 預設 CrossPoint host 改為 `http://crosspoint.local/`

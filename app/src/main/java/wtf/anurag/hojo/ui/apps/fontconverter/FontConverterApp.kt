@@ -4,6 +4,7 @@ import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.RequiresApi
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,12 +15,15 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Upload
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -31,10 +35,14 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.Alignment
@@ -58,10 +66,13 @@ fun FontConverterApp(onBack: () -> Unit) {
     val connectivityViewModel: ConnectivityViewModel = hiltViewModel()
     val status by viewModel.status.collectAsState()
     val selectedFileName by viewModel.selectedFileName.collectAsState()
+    val selectedCharsetIds by viewModel.selectedCharsetIds.collectAsState()
     val fontSize by viewModel.fontSize.collectAsState()
     val uploadState by viewModel.uploadState.collectAsState()
     val isConnected by connectivityViewModel.isConnected.collectAsState()
     val text = LocalAppStrings.current
+    val isBusy = status is FontConverterStatus.Converting || status is FontConverterStatus.ReadingFile
+    var showCharsetDialog by remember { mutableStateOf(false) }
 
     val filePickerLauncher =
             rememberLauncherForActivityResult(
@@ -134,27 +145,48 @@ fun FontConverterApp(onBack: () -> Unit) {
                     }
                 }
 
-                Button(
-                        onClick = {
-                            filePickerLauncher.launch(
-                                    arrayOf(
-                                            "font/ttf",
-                                            "font/otf",
-                                            "font/collection",
-                                            "application/x-font-ttf",
-                                            "application/x-font-otf",
-                                            "application/octet-stream"
-                                    )
-                            )
-                        },
-                        enabled = status !is FontConverterStatus.Converting &&
-                                status !is FontConverterStatus.ReadingFile,
-                        colors =
-                                ButtonDefaults.buttonColors(
-                                        containerColor = MaterialTheme.colorScheme.primary
-                                )
+                Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text(text.selectFontFile)
+                    Button(
+                            onClick = {
+                                filePickerLauncher.launch(
+                                        arrayOf(
+                                                "font/ttf",
+                                                "font/otf",
+                                                "font/collection",
+                                                "application/x-font-ttf",
+                                                "application/x-font-otf",
+                                                "application/octet-stream"
+                                        )
+                                )
+                            },
+                            enabled = !isBusy,
+                            modifier = Modifier.weight(1f),
+                            colors =
+                                    ButtonDefaults.buttonColors(
+                                            containerColor = MaterialTheme.colorScheme.primary
+                                    )
+                    ) {
+                        Text(text.selectFontFile)
+                    }
+
+                    OutlinedButton(
+                            onClick = { showCharsetDialog = true },
+                            enabled = !isBusy,
+                            modifier = Modifier.weight(1f)
+                    ) {
+                        Text("${text.selectCharset} (${selectedCharsetIds.size})")
+                    }
+                }
+
+                Button(
+                        onClick = { viewModel.startConversion() },
+                        enabled = selectedFileName != null && !isBusy,
+                        modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(text.startFontConversion)
                 }
 
                 selectedFileName?.let {
@@ -164,6 +196,16 @@ fun FontConverterApp(onBack: () -> Unit) {
                             color = MaterialTheme.colorScheme.onSurface
                     )
                 }
+
+                Text(
+                        text =
+                                FontCharacterSets.selectedLabel(
+                                        selectedCharsetIds,
+                                        labelForId = text::fontCharsetLabel
+                                ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
 
                 when (val current = status) {
                     FontConverterStatus.Idle -> Unit
@@ -265,7 +307,95 @@ fun FontConverterApp(onBack: () -> Unit) {
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
+
+            if (showCharsetDialog) {
+                FontCharsetDialog(
+                        selectedIds = selectedCharsetIds,
+                        labelForId = text::fontCharsetLabel,
+                        title = text.selectCharset,
+                        confirmText = text.save,
+                        cancelText = text.cancel,
+                        onDismiss = { showCharsetDialog = false },
+                        onApply = {
+                            viewModel.updateSelectedCharsets(it)
+                            showCharsetDialog = false
+                        }
+                )
+            }
         }
+    }
+}
+
+@Composable
+private fun FontCharsetDialog(
+        selectedIds: Set<String>,
+        labelForId: (String) -> String,
+        title: String,
+        confirmText: String,
+        cancelText: String,
+        onDismiss: () -> Unit,
+        onApply: (Set<String>) -> Unit
+) {
+    var pending by remember(selectedIds) { mutableStateOf(selectedIds) }
+
+    AlertDialog(
+            onDismissRequest = onDismiss,
+            title = { Text(title) },
+            text = {
+                Column(
+                        modifier =
+                                Modifier
+                                        .fillMaxWidth()
+                                        .verticalScroll(rememberScrollState())
+                ) {
+                    FontCharacterSets.options.forEach { option ->
+                        val checked = option.id in pending
+                        Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Checkbox(
+                                    checked = checked,
+                                    onCheckedChange = { isChecked ->
+                                        pending =
+                                                if (isChecked) {
+                                                    pending + option.id
+                                                } else {
+                                                    pending - option.id
+                                                }
+                                    }
+                            )
+                            Text(labelForId(option.id))
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { onApply(pending) }) {
+                    Text(confirmText)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = onDismiss) {
+                    Text(cancelText)
+                }
+            }
+    )
+}
+
+private fun AppStrings.fontCharsetLabel(id: String): String {
+    return when (id) {
+        "tc_common" -> fontCharsetTcCommon
+        "tc_less_common" -> fontCharsetTcLessCommon
+        "japanese" -> fontCharsetJapanese
+        "sc" -> fontCharsetSimplifiedChinese
+        "bopomofo" -> fontCharsetBopomofo
+        "latin" -> fontCharsetEnglish
+        "latin_extended" -> fontCharsetLatin
+        "hangul" -> fontCharsetKorean
+        "greek_cyrillic" -> fontCharsetGreekCyrillic
+        "symbols" -> fontCharsetSymbolsMath
+        else -> id
     }
 }
 

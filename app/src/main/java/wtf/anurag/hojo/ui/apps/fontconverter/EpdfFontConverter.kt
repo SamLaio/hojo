@@ -15,7 +15,8 @@ import kotlin.math.ceil
 
 data class EpdfFontOptions(
         val sizePx: Int = 18,
-        val bitsPerPixel: Int = 2
+        val bitsPerPixel: Int = 2,
+        val candidateCodePoints: List<Int> = emptyList()
 )
 
 data class EpdfFontProgress(
@@ -50,7 +51,7 @@ class EpdfFontConverter(private val context: Context) {
                     isSubpixelText = false
                 }
 
-        val codePoints = availableCodePoints(paint, onProgress)
+        val codePoints = availableCodePoints(paint, options.candidateCodePoints, onProgress)
         val intervals = intervalsFromCodePoints(codePoints)
         val glyphs = mutableListOf<GlyphProps>()
         val bitmapData = ByteArrayOutputStream()
@@ -98,8 +99,33 @@ class EpdfFontConverter(private val context: Context) {
 
     private fun availableCodePoints(
             paint: Paint,
+            candidateCodePoints: List<Int>,
             onProgress: (EpdfFontProgress) -> Unit
     ): List<Int> {
+        val candidates =
+                if (candidateCodePoints.isNotEmpty()) {
+                    candidateCodePoints.distinct().sorted()
+                } else {
+                    defaultCandidateCodePoints()
+                }
+        val total = candidates.size
+        val result = mutableListOf<Int>()
+
+        candidates.forEachIndexed { index, codePoint ->
+            val text = String(Character.toChars(codePoint))
+            if (paint.hasGlyph(text)) {
+                result += codePoint
+            }
+            if ((index + 1) % 256 == 0) {
+                onProgress(EpdfFontProgress(index + 1, total))
+            }
+        }
+
+        onProgress(EpdfFontProgress(total, total))
+        return result
+    }
+
+    private fun defaultCandidateCodePoints(): List<Int> {
         val candidateIntervals =
                 listOf(
                         Interval(0x0000, 0x007F),
@@ -119,25 +145,7 @@ class EpdfFontConverter(private val context: Context) {
                         Interval(0xFF00, 0xFFEF),
                         Interval(0xFFFD, 0xFFFD)
                 )
-        val total = candidateIntervals.sumOf { it.end - it.start + 1 }
-        val result = mutableListOf<Int>()
-        var scanned = 0
-
-        for (interval in candidateIntervals) {
-            for (codePoint in interval.start..interval.end) {
-                val text = String(Character.toChars(codePoint))
-                if (paint.hasGlyph(text)) {
-                    result += codePoint
-                }
-                scanned++
-                if (scanned % 256 == 0) {
-                    onProgress(EpdfFontProgress(scanned, total))
-                }
-            }
-        }
-
-        onProgress(EpdfFontProgress(total, total))
-        return result
+        return candidateIntervals.flatMap { interval -> interval.start..interval.end }
     }
 
     private fun intervalsFromCodePoints(codePoints: List<Int>): List<Interval> {

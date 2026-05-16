@@ -8,6 +8,11 @@
 // Pending EPUB chunks for chunked loading
 let _epubChunks = [];
 let _epubTotalChunks = 0;
+let _fontChunks = [];
+let _fontTotalChunks = 0;
+let _fontChunkName = '';
+let _fontChunkUseAsPrimary = false;
+let _customFontFace = '';
 
 // Disable the dither Web Worker in headless Android WebView context.
 // Android background process throttling suspends Worker threads after a few
@@ -45,6 +50,40 @@ CREngine().then(async function(module) {
     }
 });
 
+function registerFontData(data, filename, useAsPrimary) {
+    if (!renderer || !renderer.registerFontFromMemory) {
+        return 'error: renderer font registration unavailable';
+    }
+
+    const baseName = (filename || 'font.ttf').replace(/\.[^.]+$/, '');
+    const familyName = extractFontFamilyName(data) || baseName;
+    const ptr = Module.allocateMemory(data.length);
+    Module.HEAPU8.set(data, ptr);
+    const result = renderer.registerFontFromMemory(ptr, data.length, filename || 'font.ttf');
+    Module.freeMemory(ptr);
+
+    if (!result) {
+        return 'error: failed to register font';
+    }
+
+    _registeredFallbackFaces.push(familyName, baseName);
+    _registeredFallbackFaces = [...new Set(_registeredFallbackFaces.filter(Boolean))];
+
+    if (useAsPrimary) {
+        _customFontFace = familyName;
+        _androidSettings.fontFace = familyName;
+        if (renderer.setFontFace) {
+            renderer.setFontFace(familyName);
+        }
+    }
+
+    if (renderer.setFallbackFontFaces) {
+        renderer.setFallbackFontFaces(buildFallbackFontFaces(useAsPrimary ? familyName : _androidSettings.fontFace));
+    }
+
+    return 'ok';
+}
+
 // ─── BridgeAPI ────────────────────────────────────────────────────────────────
 window.BridgeAPI = {
 
@@ -72,7 +111,7 @@ window.BridgeAPI = {
                 fontWeight:       s.fontWeight !== undefined ? s.fontWeight : 400,
                 lineHeight:       s.lineHeight !== undefined ? s.lineHeight : 120,
                 margin:           s.margin     !== undefined ? s.margin     : 20,
-                fontFace:         s.fontFace   || 'Literata',
+                fontFace:         s.fontFace !== undefined ? s.fontFace : 'Literata',
                 textAlign:        s.textAlign  !== undefined ? s.textAlign  : -1,
                 wordSpacing:      s.wordSpacing !== undefined ? s.wordSpacing : 100,
                 // hyphenation is an int: 0=Off, 1=Algorithmic, 2=Dictionary
@@ -107,6 +146,46 @@ window.BridgeAPI = {
             };
 
             return 'ok';
+        } catch(e) {
+            return 'error: ' + e.message;
+        }
+    },
+
+    beginFontChunks: function(totalChunks, filename, useAsPrimary) {
+        _fontChunks = [];
+        _fontTotalChunks = totalChunks;
+        _fontChunkName = filename || 'font.ttf';
+        _fontChunkUseAsPrimary = useAsPrimary === true;
+        return 'ok';
+    },
+
+    addFontChunk: function(base64Chunk, chunkIndex) {
+        const binary = atob(base64Chunk);
+        const chunk = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) {
+            chunk[i] = binary.charCodeAt(i);
+        }
+        _fontChunks[chunkIndex] = chunk;
+        return 'ok';
+    },
+
+    finishFontChunks: function() {
+        try {
+            let totalLen = 0;
+            for (const c of _fontChunks) totalLen += c.length;
+            const data = new Uint8Array(totalLen);
+            let offset = 0;
+            for (const c of _fontChunks) {
+                data.set(c, offset);
+                offset += c.length;
+            }
+
+            const result = registerFontData(data, _fontChunkName, _fontChunkUseAsPrimary);
+            _fontChunks = [];
+            _fontTotalChunks = 0;
+            _fontChunkName = '';
+            _fontChunkUseAsPrimary = false;
+            return result;
         } catch(e) {
             return 'error: ' + e.message;
         }
@@ -174,13 +253,7 @@ window.BridgeAPI = {
             for (let i = 0; i < binary.length; i++) {
                 data[i] = binary.charCodeAt(i);
             }
-            if (renderer && renderer.registerFontFromMemory) {
-                const ptr = Module.allocateMemory(data.length);
-                Module.HEAPU8.set(data, ptr);
-                renderer.registerFontFromMemory(ptr, data.length, filename);
-                Module.freeMemory(ptr);
-            }
-            return 'ok';
+            return registerFontData(data, filename, true);
         } catch(e) {
             return 'error: ' + e.message;
         }
